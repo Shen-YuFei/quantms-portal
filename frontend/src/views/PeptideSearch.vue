@@ -26,26 +26,24 @@
 
       <!-- Query bar -->
       <div class="filter-bar" style="align-items: flex-start; flex-wrap: wrap; gap: 10px">
-        <div class="filter-group" style="flex-wrap: wrap">
+        <div class="filter-group" style="flex-wrap: wrap; width: 100%">
           <input
             v-if="mode === 'peptide'"
             v-model="sequence"
             type="text"
-            class="filter-search"
-            style="width: 280px; text-transform: uppercase"
-            placeholder="Peptide sequence (required), e.g. ADSRDPASDQMQHWK"
+            class="filter-search ps-query ps-seq"
+            placeholder="Peptide sequence, e.g. ADSRDPASDQMQHWK"
             aria-label="Peptide sequence"
-            @keyup.enter="run"
+            @keyup.enter="search"
           />
           <input
             v-else
             v-model="proteinQuery"
             type="text"
-            class="filter-search"
-            style="width: 280px"
-            placeholder="UniProt / gene (required), e.g. P04040 / CAT"
+            class="filter-search ps-query"
+            placeholder="UniProt accession or gene, e.g. P04040 / CAT"
             aria-label="Protein accession or gene"
-            @keyup.enter="run"
+            @keyup.enter="search"
           />
 
           <select v-if="mode === 'peptide'" v-model="matchMode" class="facet-select" title="Match mode" aria-label="Match mode">
@@ -86,7 +84,7 @@
             <option value="">All organisms</option>
             <option v-for="o in organismOptions" :key="o.value" :value="o.value">{{ o.value }} ({{ o.datasets }})</option>
           </select>
-          <input v-model="tissue" type="text" class="filter-search" style="width: 150px" placeholder="Tissue / organism part" aria-label="Tissue or organism part" />
+          <input v-model="tissue" type="text" class="filter-search ps-tissue" placeholder="Tissue / organism part" aria-label="Tissue or organism part" />
           <select v-model="instrument" class="facet-select" aria-label="Instrument" title="Instrument">
             <option value="">All instruments</option>
             <option v-for="i in facets.instrument" :key="i.value" :value="i.value">{{ cleanInstrument(i.value) }}</option>
@@ -96,7 +94,7 @@
             <option v-for="c in facets.collection" :key="c.value" :value="c.value">{{ c.value }}</option>
           </select>
 
-          <button class="page-btn primary" style="padding: 8px 18px" :disabled="!canSearch" @click="run">Search</button>
+          <button class="page-btn primary" style="padding: 8px 18px" :disabled="!canSearch" @click="search">Search</button>
           <button v-if="hasFilters" class="page-btn" style="padding: 8px 14px" @click="clearFilters">Clear</button>
         </div>
       </div>
@@ -156,7 +154,7 @@
         <!-- Biological profile for the searched bare peptide, above the rows -->
         <PeptideProfile v-if="mode === 'peptide' && profileSequence" :sequence="profileSequence" />
         <!-- Protein-level mirror: biological profile for the searched protein, above the rows -->
-        <ProteinProfile v-if="mode === 'protein' && profileProtein" :accession="profileProtein" :gpp-min="highConfidenceOnly ? gppMin : null" @pick="pickProtein" />
+        <ProteinProfile v-if="mode === 'protein' && profileProtein" :accession="profileProtein" :gpp-min="profileGppMin" @pick="pickProtein" />
 
         <div v-if="result" class="result-count" style="margin: 8px 0 16px">
           {{ result.total_datasets }} dataset<span v-if="result.total_datasets !== 1">s</span> match
@@ -202,7 +200,7 @@
                   <span v-if="ds.n_peptidoforms > 3" style="color: var(--text-muted)"> +{{ ds.n_peptidoforms - 3 }}</span>
                 </td>
                 <td style="text-align: center">
-                  <a v-if="ds.dataset_url" :href="ds.dataset_url" target="_blank" rel="noopener" class="dl-link" title="Browse dataset" :aria-label="`Browse dataset ${ds.dataset_accession}`">
+                  <a v-if="safeHref(ds.dataset_url)" :href="safeHref(ds.dataset_url)" target="_blank" rel="noopener" class="dl-link" title="Browse dataset" :aria-label="`Browse dataset ${ds.dataset_accession}`">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </a>
                   <span v-else style="color: var(--text-muted)">—</span>
@@ -253,9 +251,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet } from '../api.js'
+import { normalizeSearchResult } from '../utils/search.js'
+import { getPeptideStats } from '../utils/peptideStats.js'
+import { safeHref } from '../utils/links.js'
 import { PEPTIDE_SEARCH_BASE, GPP_FALLBACK_MIN } from '../config.js'
 import { formatNum, formatBig, cleanInstrument, collectionTag, ptmClassInfo, isBiologicalPtm } from '../utils/format.js'
 import PeptideProfile from '../components/PeptideProfile.vue'
@@ -493,7 +494,7 @@ async function init() {
     // filter dropdowns stay empty; search still works
   }
   try {
-    stats.value = await apiGet(PEPTIDE_SEARCH_BASE, '/stats')
+    stats.value = await getPeptideStats()
     // Dynamic, per-build GPP default cutoff lives at /stats → gpp.default_min.
     // Absent (backend has no GPP data) → keep the GPP_FALLBACK_MIN constant.
     const d = Number(stats.value?.gpp?.default_min)
@@ -544,47 +545,87 @@ watch(gppMin, () => {
   gppSliderTimer = setTimeout(rerunIfSearched, 200)
 })
 
+// Cutoff handed to ProteinProfile. Follows the toggle immediately but the
+// slider only after it settles (same debounce as the results table), so a drag
+// doesn't refetch the profile on every 0.01 step.
+const profileGppMin = ref(highConfidenceOnly.value ? gppMin.value : null)
+let profileGppTimer = null
+watch([highConfidenceOnly, gppMin], ([on], [wasOn]) => {
+  if (profileGppTimer) clearTimeout(profileGppTimer)
+  const next = on ? gppMin.value : null
+  if (on !== wasOn) profileGppMin.value = next
+  else profileGppTimer = setTimeout(() => { profileGppMin.value = next }, 200)
+})
+onBeforeUnmount(() => {
+  if (profileGppTimer) clearTimeout(profileGppTimer)
+  if (gppSliderTimer) clearTimeout(gppSliderTimer)
+})
+
 // Retry from the "unavailable" banner: re-probe facets/stats and re-run the
 // current search.
 function retry() {
   init()
-  run()
+  search()
 }
 
-async function run() {
+// Request bookkeeping: `runSeq` lets a superseded search drop its late
+// response; `lastRunKey` identifies the search currently shown/in flight so
+// watcher-driven re-runs (URL sync, GPP toggle on a deep link) don't send the
+// same request twice.
+let runSeq = 0
+let lastRunKey = ''
+
+// Explicit user search (button / Enter / demos): always runs.
+function search() {
+  return run({ force: true })
+}
+
+async function run({ force = false } = {}) {
   if (!canSearch.value) return
   // Reflect the search into the URL so it can be shared/bookmarked. Use
   // replace() so repeated searches don't spam browser history.
   if (!applyingRoute) router.replace({ query: currentQuery() }).catch(() => {})
+  const params = buildParams()
+  let path
+  if (mode.value === 'peptide') {
+    params.sequence = sequence.value.trim().toUpperCase()
+    params.match = matchMode.value
+    path = '/search/peptide'
+  } else {
+    params.query = proteinQuery.value.trim()
+    path = '/search/protein'
+  }
+  const key = `${path}?${JSON.stringify(params)}`
+  if (!force && key === lastRunKey) return
+  lastRunKey = key
+  const seq = ++runSeq
+
   loading.value = true
   result.value = null
   visibleCount.value = PAGE_SIZE // reset the row cap for each new search
+  if (mode.value === 'peptide') {
+    query.value = params.sequence
+    // Drive the biological profile from the searched bare peptide. A specific
+    // peptidoform query still profiles its bare backbone (mods stripped).
+    profileSequence.value = bareOf(params.sequence)
+    profileProtein.value = ''
+  } else {
+    query.value = params.query
+    profileSequence.value = ''
+    // Drive the protein biological profile from the searched accession/gene.
+    profileProtein.value = params.query
+  }
   try {
-    const params = buildParams()
-    let path
-    if (mode.value === 'peptide') {
-      params.sequence = sequence.value.trim().toUpperCase()
-      params.match = matchMode.value
-      query.value = params.sequence
-      // Drive the biological profile from the searched bare peptide. A specific
-      // peptidoform query still profiles its bare backbone (mods stripped).
-      profileSequence.value = bareOf(params.sequence)
-      profileProtein.value = ''
-      path = '/search/peptide'
-    } else {
-      params.query = proteinQuery.value.trim()
-      query.value = params.query
-      profileSequence.value = ''
-      // Drive the protein biological profile from the searched accession/gene.
-      profileProtein.value = params.query
-      path = '/search/protein'
-    }
-    result.value = await apiGet(PEPTIDE_SEARCH_BASE, path, params)
+    const data = await apiGet(PEPTIDE_SEARCH_BASE, path, params)
+    if (seq !== runSeq) return
+    result.value = normalizeSearchResult(data)
     backendDown.value = false
   } catch (e) {
+    if (seq !== runSeq) return
+    lastRunKey = '' // allow the same search to be retried
     backendDown.value = true
   } finally {
-    loading.value = false
+    if (seq === runSeq) loading.value = false
   }
 }
 
@@ -594,7 +635,7 @@ function demo(seq, mod, res) {
   sequence.value = seq
   modification.value = mod
   residue.value = res
-  run()
+  search()
 }
 // Demo a specific peptidoform search (match mode = peptidoform): the sequence is
 // the full OpenMS peptidoform, so the modification/residue filters are cleared.
@@ -604,12 +645,12 @@ function demoPeptidoform(peptidoform) {
   modification.value = ''
   residue.value = ''
   sequence.value = peptidoform
-  run()
+  search()
 }
 function demoProtein(q) {
   mode.value = 'protein'
   proteinQuery.value = q
-  run()
+  search()
 }
 // A "did you mean" candidate was chosen in ProteinProfile: re-run the protein
 // search/profile for that exact accession. Reuses the normal protein-search
@@ -619,7 +660,7 @@ function pickProtein(accession) {
   if (!acc) return
   mode.value = 'protein'
   proteinQuery.value = acc
-  run()
+  search()
 }
 function clearFilters() {
   modification.value = ''
@@ -633,6 +674,10 @@ function clearFilters() {
 // Drop the results table + profiles. Used when the route becomes empty (e.g. clicking the navbar
 // "Peptide Search" while a search is open) so the previous results don't linger under a blank form.
 function clearResults() {
+  // Invalidate any in-flight search so it can't repopulate the cleared view.
+  runSeq++
+  lastRunKey = ''
+  loading.value = false
   result.value = null
   query.value = ''
   profileSequence.value = ''
@@ -661,6 +706,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Main query box takes the free space so its placeholder is never clipped. */
+.ps-query {
+  flex: 1 1 340px;
+  min-width: 240px;
+  max-width: 460px;
+}
+/* Upper-case what the user types, not the hint text (which then overflowed). */
+.ps-seq {
+  text-transform: uppercase;
+}
+.ps-seq::placeholder {
+  text-transform: none;
+}
+.ps-tissue {
+  width: 190px;
+}
 .ps-stats {
   display: flex;
   gap: 32px;

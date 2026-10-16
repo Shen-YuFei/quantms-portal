@@ -5,8 +5,8 @@
       <div>
         <h4 class="ds-panel-title">{{ displayTitle }}</h4>
         <div class="ds-panel-sub">
-          <span v-if="organism" class="ds-organism">🧬 {{ organism }}</span>
-          <span v-if="instrument" class="ds-instrument">🔬 {{ instrument }}</span>
+          <span v-if="organism" class="ds-organism"><span class="chip-icon" aria-hidden="true">🧬</span>{{ organism }}</span>
+          <span v-if="instrument" class="ds-instrument"><span class="chip-icon" aria-hidden="true">🔬</span>{{ instrument }}</span>
           <span v-if="dataset.source" class="ds-source-tag">{{ dataset.source }}</span>
         </div>
       </div>
@@ -126,7 +126,7 @@
         >{{ sourceLabel }} ↗</a>
         <router-link
           v-if="variant === 'inline'"
-          :to="`/collections/${dataset.collection}/${dataset.accession}`"
+          :to="datasetPath(dataset)"
           class="btn btn-outline ds-btn"
         >Open full page →</router-link>
       </div>
@@ -138,9 +138,11 @@
 </template>
 
 <script setup>
+import { datasetPath } from '../utils/evaluation.js'
 import { computed } from 'vue'
 import { formatNum, formatBytes, cleanInstrument, collectionTag } from '../utils/format.js'
 import { browseUrl } from '../config.js'
+import { safeHref } from '../utils/links.js'
 import CiteCredit from './CiteCredit.vue'
 
 const props = defineProps({
@@ -176,9 +178,9 @@ const hasPublication = computed(() => {
   return !!(p && (p.pubmed || p.doi))
 })
 
-const s3Url = computed(() => props.dataset.download_url || browseUrl(props.dataset.dataset_ref))
+const s3Url = computed(() => safeHref(props.dataset.download_url) || browseUrl(props.dataset.dataset_ref))
 
-const sourceUrl = computed(() => props.dataset.source_url || props.dataset.px_url || '')
+const sourceUrl = computed(() => safeHref(props.dataset.source_url) || safeHref(props.dataset.px_url))
 const sourceLabel = computed(() => {
   const src = props.dataset.source
   if (src) return `${src} page`

@@ -17,7 +17,7 @@
       <div class="search-card">
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
           <div style="position: relative; flex: 1; min-width: 180px;">
-            <select v-model="sourceType" class="source-select" @change="clearResults">
+            <select v-model="sourceType" class="source-select" aria-label="Expression source" @change="clearResults">
               <option value="tissue">Tissue (Human)</option>
               <option value="cell">Cell Line (Human)</option>
             </select>
@@ -27,6 +27,7 @@
               v-model="query"
               class="search-input"
               :placeholder="proteins.length ? 'Add another protein…' : 'Protein accession (e.g. P50851)'"
+              aria-label="Protein accession or gene name"
               @keyup.enter="addProtein"
               autocomplete="off"
               spellcheck="false"
@@ -42,7 +43,7 @@
           <span v-for="(p, i) in proteins" :key="p.name" class="protein-tag" :style="{ background: tagColors[i], color: '#fff' }">
             {{ p.name }}
             <span v-if="p.gene_name" style="opacity: 0.8; margin-left: 2px; font-weight: 400;">({{ p.gene_name }})</span>
-            <button class="tag-close" @click="removeProtein(i)">&times;</button>
+            <button type="button" class="tag-close" :aria-label="`Remove ${p.name}`" @click="removeProtein(i)">&times;</button>
           </span>
         </div>
 
@@ -217,8 +218,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { computeStats, isAlreadyAdded } from '../utils/baseline.js'
+import { createBaselineClient } from '../utils/baselineClient.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -232,8 +235,6 @@ const searching = ref(false)
 const errorMsg = ref('')
 const proteins = ref([])   // Array of { name, gene_name, tags, data, stats }
 
-const tissueDb = ref(null)
-const cellDb = ref(null)
 
 // Sync proteins to URL: /baseline?proteins=P50851,Q96HS1
 function updateUrl() {
@@ -268,99 +269,51 @@ const sourceLabel = computed(() =>
   sourceType.value === 'tissue' ? 'Human Tissues' : 'Human Cell Lines'
 )
 
-// ── Load gzip JSON ──
-async function loadGzipJson(url) {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`)
-  const clone = response.clone()
+// ── Expression databases ──
+// Downloaded and parsed once per source inside a Web Worker (the cell-line file
+// is ~120 MB of JSON once decompressed); only the requested entries come back.
+const baseline = createBaselineClient({ base: import.meta.env.BASE_URL })
+onBeforeUnmount(() => baseline.terminate())
+
+async function lookupEntry(source, q) {
+  if (!baseline.isLoaded(source)) loadingData.value = true
   try {
-    return await response.json()
-  } catch {
-    const ds = new DecompressionStream('gzip')
-    const stream = clone.body.pipeThrough(ds)
-    const text = await new Response(stream).text()
-    return JSON.parse(text)
+    return await baseline.lookup(source, q)
+  } finally {
+    loadingData.value = false
   }
 }
 
-function buildIndex(entries) {
-  const idx = {}
-  for (const entry of entries) {
-    if (entry.name) idx[entry.name.toUpperCase()] = entry
-    if (entry.gene_name) idx[entry.gene_name.toUpperCase()] = entry
-  }
-  return idx
-}
-
-async function getDb() {
-  if (sourceType.value === 'tissue') {
-    if (!tissueDb.value) {
-      loadingData.value = true
-      try {
-        const base = import.meta.env.BASE_URL
-        const raw = await loadGzipJson(`${base}data/tissueJson.json.gz`)
-        tissueDb.value = buildIndex(Array.isArray(raw) ? raw : Object.values(raw))
-      } finally {
-        loadingData.value = false
-      }
-    }
-    return tissueDb.value
-  } else {
-    if (!cellDb.value) {
-      loadingData.value = true
-      try {
-        const base = import.meta.env.BASE_URL
-        const raw = await loadGzipJson(`${base}data/cellJson.json.gz`)
-        cellDb.value = buildIndex(Array.isArray(raw) ? raw : Object.values(raw))
-      } finally {
-        loadingData.value = false
-      }
-    }
-    return cellDb.value
-  }
-}
-
-// ── Box stats per tissue ──
-function computeStats(entry) {
-  const statsMap = {}
-  if (!entry.tags || !entry.data) return statsMap
-  for (let i = 0; i < entry.tags.length; i++) {
-    const vals = entry.data[i]
-    if (!vals || vals.length === 0) continue
-    const sorted = [...vals].sort((a, b) => a - b)
-    const n = sorted.length
-    statsMap[entry.tags[i]] = {
-      min: sorted[0],
-      q1: sorted[Math.floor(n * 0.25)],
-      median: sorted[Math.floor(n * 0.5)],
-      q3: sorted[Math.floor(n * 0.75)],
-      max: sorted[n - 1],
-      count: n,
-    }
-  }
-  return statsMap
-}
+// ── Box stats per tissue: see computeStats in utils/baseline.js ──
 
 // ── Add protein ──
 async function addProtein() {
-  const q = query.value.trim().toUpperCase()
+  // One add at a time: Enter and the example links bypass the disabled button.
+  if (searching.value) return
+  const raw = query.value.trim()
+  const q = raw.toUpperCase()
   if (!q) return
   if (proteins.value.length >= 5) return
   if (proteins.value.some(p => p.name.toUpperCase() === q || (p.gene_name && p.gene_name.toUpperCase() === q))) {
-    errorMsg.value = `"${query.value.trim()}" is already added.`
+    errorMsg.value = `"${raw}" is already added.`
     query.value = ''
     return
   }
 
   errorMsg.value = ''
   searching.value = true
+  const source = sourceType.value
 
   try {
-    const db = await getDb()
-    const entry = db[q]
+    const entry = await lookupEntry(source, q)
+    // The source was switched while the database was loading: drop this add.
+    if (source !== sourceType.value) return
     if (!entry) {
-      errorMsg.value = `No expression data found for "${query.value.trim()}".`
-    } else {
+      errorMsg.value = `No expression data found for "${raw}".`
+    } else if (isAlreadyAdded(proteins.value, entry)) {
+      errorMsg.value = `"${raw}" is already added.`
+      query.value = ''
+    } else if (proteins.value.length < 5) {
       proteins.value.push({
         name: entry.name,
         gene_name: entry.gene_name || '',
@@ -388,6 +341,7 @@ function clearResults() {
 }
 
 function useExample(ex) {
+  if (searching.value) return
   query.value = ex
   addProtein()
 }

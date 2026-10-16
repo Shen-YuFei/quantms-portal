@@ -15,6 +15,12 @@
               <div class="stat-value" style="font-size: 24px">{{ formatBig(datasetCount) }}</div>
               <div class="stat-label">Datasets</div>
             </div>
+            <!-- Biological coverage: distinct across members, from each dataset's SDRF
+                 (cell lines by Cellosaurus accession). Shown only when annotated. -->
+            <div v-for="b in bioStats" :key="b.label" class="col-stat">
+              <div class="stat-value" style="font-size: 24px">{{ formatBig(b.value) }}</div>
+              <div class="stat-label">{{ b.label }}</div>
+            </div>
             <!-- Peptides/Proteins are collection-wide UNIQUE (deduped genes + peptide
                  sequences across members); fall back to the summed totals for collections
                  not yet restatted. Features/PSMs/Samples remain sums (data volume). -->
@@ -67,8 +73,8 @@
       <!-- Sort control -->
       <div class="filter-bar">
         <div class="filter-group">
-          <label class="sort-label">Sort by</label>
-          <select v-model="sort" class="facet-select" @change="reload">
+          <label class="sort-label" for="collection-sort">Sort by</label>
+          <select id="collection-sort" v-model="sort" class="facet-select" @change="reload">
             <option value="peptides">Peptides</option>
             <option value="proteins">Proteins</option>
             <option value="samples">Samples</option>
@@ -90,7 +96,7 @@
 
       <!-- Datasets table -->
       <template v-else>
-        <DatasetResultsTable :datasets="rows" :sort="sort" @sort="onSort" />
+        <DatasetResultsTable :datasets="rows" :sort="sort" :show-collection="false" @sort="onSort" />
 
         <div v-if="totalPages > 1" class="pagination">
           <button class="page-btn" :class="{ disabled: page === 1 }" :disabled="page === 1" @click="goPage(page - 1)">← Prev</button>
@@ -109,6 +115,7 @@ import DatasetResultsTable from '../components/DatasetResultsTable.vue'
 import { apiGet } from '../api.js'
 import { GATEWAY_BASE, DATASET_SEARCH_BASE } from '../config.js'
 import { formatBig, formatBytes } from '../utils/format.js'
+import { createRequestGuard } from '../utils/requestGuard.js'
 
 const route = useRoute()
 const name = ref(route.params.name)
@@ -125,22 +132,37 @@ const loadingRows = ref(true)
 const rowsError = ref(false)
 
 const organisms = computed(() => (summary.value && summary.value.organisms) || [])
+const bioStats = computed(() => {
+  const s = (summary.value && summary.value.stats) || {}
+  return [
+    { label: 'Cell lines', value: s.total_cell_lines },
+    { label: 'Diseases', value: s.total_diseases },
+    { label: 'Tissues', value: s.total_tissues },
+  ].filter((b) => b.value)
+})
 const datasetCount = computed(() => {
   if (total.value != null) return total.value
   return (summary.value && summary.value.stats && summary.value.stats.datasets) || 0
 })
 
+// Drop responses from superseded requests (collection switch, fast paging/sorting).
+const summaryGuard = createRequestGuard()
+const rowsGuard = createRequestGuard()
+
 async function loadSummary() {
+  const isCurrent = summaryGuard.next()
   summaryError.value = false
   summary.value = null
   try {
-    summary.value = await apiGet(GATEWAY_BASE, `/collections/${name.value}`)
+    const data = await apiGet(GATEWAY_BASE, `/collections/${encodeURIComponent(name.value)}`)
+    if (isCurrent()) summary.value = data
   } catch (e) {
-    summaryError.value = true
+    if (isCurrent()) summaryError.value = true
   }
 }
 
 async function loadRows() {
+  const isCurrent = rowsGuard.next()
   loadingRows.value = true
   rowsError.value = false
   try {
@@ -149,13 +171,14 @@ async function loadRows() {
       sort: sort.value,
       page: page.value,
     })
-    rows.value = data.datasets || []
-    total.value = data.total ?? rows.value.length
-    totalPages.value = data.total_pages || 1
+    if (!isCurrent()) return
+    rows.value = data?.datasets || []
+    total.value = data?.total ?? rows.value.length
+    totalPages.value = data?.total_pages || 1
   } catch (e) {
-    rowsError.value = true
+    if (isCurrent()) rowsError.value = true
   } finally {
-    loadingRows.value = false
+    if (isCurrent()) loadingRows.value = false
   }
 }
 

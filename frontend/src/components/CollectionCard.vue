@@ -1,5 +1,5 @@
 <template>
-  <div class="collection-card" @click="$emit('select', collection.name)" style="cursor: pointer;">
+  <router-link :to="`/collections/${encodeURIComponent(collection.name)}`" class="collection-card">
     <div class="collection-card-accent"></div>
     <div class="collection-icon" :class="iconClass">
       <svg v-if="collection.name === 'msnet'" width="26" height="26" viewBox="0 0 24 24" fill="none" :stroke="iconColor" stroke-width="1.6">
@@ -18,6 +18,18 @@
       <div class="collection-stat">
         <div class="collection-stat-val">{{ collection.dataset_count }}</div>
         <div class="collection-stat-label">Datasets</div>
+      </div>
+      <div v-if="collection.stats?.total_cell_lines" class="collection-stat">
+        <div class="collection-stat-val">{{ formatNumber(collection.stats.total_cell_lines) }}</div>
+        <div class="collection-stat-label">Cell lines</div>
+      </div>
+      <div v-if="collection.stats?.total_diseases" class="collection-stat">
+        <div class="collection-stat-val">{{ formatNumber(collection.stats.total_diseases) }}</div>
+        <div class="collection-stat-label">Diseases</div>
+      </div>
+      <div v-if="collection.stats?.total_tissues" class="collection-stat">
+        <div class="collection-stat-val">{{ collection.stats.total_tissues }}</div>
+        <div class="collection-stat-label">Tissues</div>
       </div>
       <div v-if="collection.stats?.total_features" class="collection-stat">
         <div class="collection-stat-val">{{ formatNumber(collection.stats.total_features) }}</div>
@@ -47,10 +59,6 @@
         <div class="collection-stat-val">{{ formatNumber(collection.stats.total_peptides) }}</div>
         <div class="collection-stat-label">Peptides</div>
       </div>
-      <div v-if="collection.stats?.total_tissues" class="collection-stat">
-        <div class="collection-stat-val">{{ collection.stats.total_tissues }}</div>
-        <div class="collection-stat-label">Tissues</div>
-      </div>
       <div v-if="collection.stats?.total_contrasts" class="collection-stat">
         <div class="collection-stat-val">{{ collection.stats.total_contrasts }}</div>
         <div class="collection-stat-label">Contrasts</div>
@@ -65,17 +73,16 @@
       </span>
     </div>
     <span class="collection-cta">Browse collection &rarr;</span>
-  </div>
+  </router-link>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { formatBig } from '../utils/format.js'
 
 const props = defineProps({
   collection: { type: Object, required: true }
 })
-
-defineEmits(['select'])
 
 const colorMap = {
   'msnet': { icon: 'ci-blue', color: '#409eff' },
@@ -111,11 +118,8 @@ function organismTagClass(org) {
   return 'tag-violet'
 }
 
+// Zero / missing counts show an em-dash (formatBig alone would print "0").
 function formatNumber(n) {
-  if (!n) return '—'
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
-  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K'
-  return String(n)
+  return n ? formatBig(n) : '—'
 }
 </script>

@@ -1,43 +1,114 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from './views/Home.vue'
+import { DOCS_NAV } from './docs/nav.js'
 
-const routes = [
-  { path: '/', component: Home },
-  { path: '/collections', component: () => import('./views/Collections.vue') },
-  { path: '/collections/:name', component: () => import('./views/CollectionDetail.vue') },
-  { path: '/collections/:name/:pxd', component: () => import('./views/DatasetDetail.vue') },
-  { path: '/apps/dataset-search', component: () => import('./views/DatasetSearch.vue') },
-  { path: '/apps/peptide-search', component: () => import('./views/PeptideSearch.vue') },
-  { path: '/apps/compass', component: () => import('./views/ProteomeCompass.vue') },
-  { path: '/search', component: () => import('./views/Search.vue') },
-  { path: '/statistics', component: () => import('./views/Statistics.vue') },
-  { path: '/api', component: () => import('./views/ApiDocs.vue') },
+export const SITE_TITLE = 'quantms Portal'
+const HOME_TITLE = 'quantms Portal — Quantitative Proteomics Data'
+
+const docTitles = Object.fromEntries(DOCS_NAV.flatMap((g) => g.items.map((i) => [i.slug, i.title])))
+
+export const routes = [
+  { path: '/', component: Home, meta: { title: null } },
+  { path: '/collections', component: () => import('./views/Collections.vue'), meta: { title: 'Collections' } },
+  { path: '/collections/:name', component: () => import('./views/CollectionDetail.vue'), meta: { title: (r) => `${r.params.name} collection` } },
+  { path: '/collections/:name/:pxd', component: () => import('./views/DatasetDetail.vue'), meta: { title: (r) => `${r.params.pxd} dataset` } },
+  { path: '/collections/:name/:pxd/:hash', component: () => import('./views/DatasetDetail.vue'), meta: { title: (r) => `${r.params.pxd} dataset` } },
+  { path: '/apps/dataset-search', component: () => import('./views/DatasetSearch.vue'), meta: { title: 'Dataset Search' } },
+  { path: '/apps/peptide-search', component: () => import('./views/PeptideSearch.vue'), meta: { title: 'Peptide & Protein Search' } },
+  { path: '/apps/compass', component: () => import('./views/ProteomeCompass.vue'), meta: { title: 'Proteome Compass' } },
+  { path: '/apps/coexpression', component: () => import('./views/Coexpression.vue'), meta: { title: 'Protein Co-expression' } },
+  // Legacy placeholder: full-text search lives in Dataset Search.
+  { path: '/search', redirect: (to) => ({ path: '/apps/dataset-search', query: to.query.q ? { q: to.query.q } : {} }) },
+  { path: '/statistics', component: () => import('./views/Statistics.vue'), meta: { title: 'Statistics' } },
+  // The API & MCP are live; the old "Coming soon" page now points at their docs.
+  { path: '/api', redirect: '/docs/ai-mcp' },
   { path: '/docs', redirect: '/docs/introduction' },
-  { path: '/docs/:page', component: () => import('./views/DocsPage.vue') },
-  { path: '/baseline', component: () => import('./views/BaselineExpression.vue') },
-  { path: '/models', component: () => import('./views/Models.vue') },
-  { path: '/contact', component: () => import('./views/Contact.vue') },
-  { path: '/differential-expression', component: () => import('./views/DifferentialExpression.vue') },
-  { path: '/applications', component: () => import('./views/Applications.vue') },
+  { path: '/docs/:page', component: () => import('./views/DocsPage.vue'), meta: { title: (r) => `${docTitles[r.params.page] || 'Documentation'} · Docs` } },
+  { path: '/baseline', component: () => import('./views/BaselineExpression.vue'), meta: { title: 'Baseline Expression' } },
+  { path: '/models', component: () => import('./views/Models.vue'), meta: { title: 'Models' } },
+  { path: '/contact', component: () => import('./views/Contact.vue'), meta: { title: 'Contact' } },
+  // Obsolete (see OBSOLETE_APPS in config.js): the view is kept for recovery, the route redirects.
+  { path: '/differential-expression', redirect: '/applications' },
+  { path: '/applications', component: () => import('./views/Applications.vue'), meta: { title: 'Applications' } },
+  // Catch-all: unknown URLs render a real "not found" page instead of a blank one.
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('./views/NotFound.vue'), meta: { title: 'Page not found' } },
 ]
+
+// Height of the fixed navbar, so anchored headings aren't hidden under it.
+const NAV_OFFSET = 80
+
+// Back/forward restores the previous position; `#anchor` links land on their
+// target; a query-only change on the same page (search filters synced to the
+// URL) keeps the current position; any other navigation starts at the top.
+export function scrollBehavior(to, from, savedPosition) {
+  if (savedPosition) return savedPosition
+  if (to.hash) {
+    // Wait a tick so content rendered after the route resolves (docs) exists.
+    return new Promise((resolve) => {
+      setTimeout(() => resolve({ el: to.hash, top: NAV_OFFSET }), 0)
+    })
+  }
+  if (from && from.matched && from.matched.length && to.path === from.path) return false
+  return { top: 0 }
+}
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior() { return { top: 0 } }
+  scrollBehavior,
 })
 
-// SPA page views: gtag('config') in index.html only fires on the initial load,
-// so client-side navigations must report a page_view themselves. Guarded so it
-// is a no-op when analytics is absent (e.g. blocked or local dev).
-router.afterEach((to) => {
-  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
-    window.gtag('event', 'page_view', {
-      page_path: to.fullPath,
-      page_location: window.location.href,
-      page_title: document.title,
-    })
-  }
+// Document title for a resolved route: "<page> — quantms Portal".
+export function resolveTitle(to) {
+  const t = to && to.meta ? to.meta.title : undefined
+  const page = typeof t === 'function' ? t(to) : t
+  return page ? `${page} — ${SITE_TITLE}` : HOME_TITLE
+}
+
+// Set the title before the URL changes (beforeResolve is the last guard before
+// the history entry is written), so analytics that listen for history changes
+// record the new page's title.
+router.beforeResolve((to) => {
+  if (typeof document !== 'undefined') document.title = resolveTitle(to)
+})
+
+// Page views: gtag('config') in index.html reports the initial load, and the
+// GA4 property's enhanced measurement ("page changes based on browser history
+// events") reports client-side navigations. Sending page_view from the router
+// as well counted every in-app navigation twice, so the router doesn't.
+
+// A lazy route chunk can fail to load, most often right after a deploy (the
+// open page still references old hashed assets) or on a flaky connection.
+// Reload once onto the target URL so the browser fetches the current build;
+// the sessionStorage flag prevents a reload loop if the failure persists.
+const CHUNK_RELOAD_KEY = 'quantms-chunk-reload'
+
+export function isChunkLoadError(err) {
+  const msg = String((err && err.message) || err || '')
+  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|Loading (CSS )?chunk .* failed/i.test(msg)
+}
+
+export function handleChunkError(err, to, { storage, location } = {}) {
+  if (!isChunkLoadError(err)) return false
+  const target = (to && to.fullPath) || '/'
+  let last = null
+  try { last = storage && storage.getItem(CHUNK_RELOAD_KEY) } catch { /* storage unavailable */ }
+  if (last === target) return false
+  try { storage && storage.setItem(CHUNK_RELOAD_KEY, target) } catch { /* storage unavailable */ }
+  location.assign(target)
+  return true
+}
+
+router.onError((err, to) => {
+  if (typeof window === 'undefined') return
+  let storage = null
+  try { storage = window.sessionStorage } catch { /* blocked */ }
+  handleChunkError(err, to, { storage, location: window.location })
+})
+
+// A successful navigation clears the guard so a later deploy can reload again.
+router.afterEach(() => {
+  try { window.sessionStorage.removeItem(CHUNK_RELOAD_KEY) } catch { /* blocked */ }
 })
 
 export default router

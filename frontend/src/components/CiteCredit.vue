@@ -10,7 +10,7 @@
         <span class="cite-ds-title">{{ c.title || c.accession }}</span>
         <span v-if="c.submitter" class="cite-meta"> — {{ c.submitter.name }}</span>
         <span class="cite-links">
-          <a v-if="c.repository && c.repository.url" :href="c.repository.url" target="_blank" rel="noopener">
+          <a v-if="safeHref(c.repository && c.repository.url)" :href="safeHref(c.repository.url)" target="_blank" rel="noopener">
             {{ c.repository.name }} {{ c.accession }} &#8599;
           </a>
           <a v-if="c.publication && c.publication.doi" :href="`https://doi.org/${c.publication.doi}`" target="_blank" rel="noopener">
@@ -23,15 +23,16 @@
         <span class="cite-meta"> — collection reference</span>
         <span class="cite-links">
           <a v-if="cc.doi" :href="`https://doi.org/${cc.doi}`" target="_blank" rel="noopener">doi:{{ cc.doi }} &#8599;</a>
-          <a v-else-if="cc.url" :href="cc.url" target="_blank" rel="noopener">{{ cc.journal || 'link' }} &#8599;</a>
+          <a v-else-if="safeHref(cc.url)" :href="safeHref(cc.url)" target="_blank" rel="noopener">{{ cc.journal || 'link' }} &#8599;</a>
         </span>
       </li>
     </ul>
 
     <div class="cite-actions">
       <button v-for="s in styles" :key="s.key" type="button" class="cite-btn" @click="copy(s.key)">
-        {{ copied === s.key ? 'Copied!' : s.label }}
+        {{ copied === s.key ? 'Copied!' : copied === `failed:${s.key}` ? 'Copy failed' : s.label }}
       </button>
+      <span class="sr-only" role="status" aria-live="polite">{{ copied.startsWith('failed:') ? 'Copy failed' : copied ? 'Copied to clipboard' : '' }}</span>
     </div>
   </div>
 </template>
@@ -39,6 +40,9 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { getCredits } from '../citation.js'
+import { createRequestGuard } from '../utils/requestGuard.js'
+import { safeHref } from '../utils/links.js'
+import { copyText } from '../utils/clipboard.js'
 
 // `refs` is the list of contributing dataset refs ("ACC/hash"). For a single
 // dataset page it's one ref; for a claim it will be the top contributors.
@@ -57,15 +61,20 @@ const styles = [
 
 const hasCredits = computed(() => credits.value.length > 0)
 
+const guard = createRequestGuard()
+
 async function load() {
+  const isCurrent = guard.next()
   const refs = (props.refs || []).filter(Boolean)
   if (!refs.length) { credits.value = []; collectionCitations.value = []; citations.value = {}; return }
   try {
     const res = await getCredits(refs)
+    if (!isCurrent()) return
     credits.value = (res && res.credits) || []
     collectionCitations.value = (res && res.collection_citations) || []
     citations.value = (res && res.citations) || {}
   } catch (e) {
+    if (!isCurrent()) return
     credits.value = []
     collectionCitations.value = []
     citations.value = {}
@@ -75,13 +84,9 @@ async function load() {
 async function copy(styleKey) {
   const text = citations.value[styleKey]
   if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    copied.value = styleKey
-    setTimeout(() => { if (copied.value === styleKey) copied.value = '' }, 1500)
-  } catch (e) {
-    // clipboard blocked — no-op; the links above remain usable
-  }
+  const ok = await copyText(text)
+  copied.value = ok ? styleKey : `failed:${styleKey}`
+  setTimeout(() => { if (copied.value.endsWith(styleKey)) copied.value = '' }, ok ? 1500 : 3000)
 }
 
 watch(() => props.refs, load)
@@ -89,6 +94,7 @@ onMounted(load)
 </script>
 
 <style scoped>
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .cite { border: 1px solid var(--border, #e2e5ea); border-radius: 10px; padding: 12px 14px; margin-top: 12px; background: var(--surface, #fafbfc); }
 .cite-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .cite-title { font-weight: 600; font-size: 14px; }

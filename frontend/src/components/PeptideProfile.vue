@@ -64,7 +64,7 @@
           v-for="p in proteins"
           :key="p.accession"
           class="pp-protein-chip"
-          :href="p.uniprot_url || uniprotUrl(p.accession)"
+          :href="safeHref(p.uniprot_url) || uniprotUrl(p.accession)"
           target="_blank"
           rel="noopener"
           :title="`Open ${p.accession} on UniProt`"
@@ -83,7 +83,7 @@
       <div class="pp-chips">
         <span v-for="c in shownContext" :key="c.key" class="tag pp-count-chip" :class="c.tagClass"
               :title="`${formatNum(c.n_datasets)} datasets · ${formatNum(c.n_observations)} observations`">
-          <template v-if="c.icon">{{ c.icon }} </template>{{ c.value }}
+          <span v-if="c.icon" class="chip-icon" aria-hidden="true">{{ c.icon }}</span>{{ c.value }}
           <span class="pp-count">{{ formatNum(c.n_datasets) }}</span>
         </span>
         <button v-if="hiddenContextCount > 0" type="button" class="tag pp-ptm-more"
@@ -160,7 +160,7 @@ import { ref, computed, watch } from 'vue'
 import { apiGet } from '../api.js'
 import { PEPTIDE_SEARCH_BASE } from '../config.js'
 import { formatNum, formatBig, ptmClassInfo, orderPtms, isBiologicalPtm } from '../utils/format.js'
-import { uniprotUrl } from '../utils/links.js'
+import { uniprotUrl, safeHref } from '../utils/links.js'
 
 const props = defineProps({
   // Bare peptide sequence. Empty string clears the panel.
