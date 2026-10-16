@@ -46,12 +46,17 @@
             <div v-if="profile.best_peptide_gpp != null" title="Best Global Peptide Probability across the protein's peptides"><dt>Best GPP</dt><dd>{{ Number(profile.best_peptide_gpp).toFixed(3) }}</dd></div>
             <div v-if="profile.coverage_pct != null"><dt>Coverage</dt><dd>{{ profile.coverage_pct }}%</dd></div>
             <div v-if="profile.pgpp != null"><dt>pGPP</dt><dd>{{ profile.pgpp }}</dd></div>
+            <div v-if="profile.n_immuno_peptides" title="HLA-ligand identifications — a separate axis, not protein-existence evidence"><dt>HLA ligands</dt><dd>{{ profile.n_immuno_peptides }}</dd></div>
           </dl>
           <div v-if="usis.length" class="cc-usis">
             <div class="cc-usis-label">USIs</div>
             <code v-for="u in usis" :key="u">{{ u }}</code>
           </div>
         </template>
+        <div v-else-if="profile.quantms_immuno_observed" class="cc-no" title="HLA ligands are not protein-existence evidence">
+          Not observed (canonical)<br>
+          <small>{{ profile.n_immuno_peptides ?? 0 }} HLA ligand(s) across {{ profile.n_immuno_datasets ?? 0 }} dataset(s) — immunopeptides only</small>
+        </div>
         <div v-else class="cc-no">Not observed</div>
       </div>
 

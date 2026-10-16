@@ -41,6 +41,10 @@
             <option value="">All instruments</option>
             <option v-for="i in facetInstruments" :key="i.value" :value="i.value">{{ cleanInstrument(i.value) }}</option>
           </select>
+          <select v-model="datasetClass" class="facet-select" aria-label="Filter by biological class" @change="reload">
+            <option value="">All biological classes</option>
+            <option v-for="c in facetDatasetClasses" :key="c.value" :value="c.value">{{ datasetClassLabel(c.value) }} ({{ c.datasets }})</option>
+          </select>
           <button class="page-btn primary" style="padding: 8px 16px" @click="reload">Search</button>
           <button v-if="hasFilters" class="page-btn" style="padding: 8px 14px" @click="clearFilters">Clear</button>
         </div>
@@ -76,7 +80,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DatasetResultsTable from '../components/DatasetResultsTable.vue'
 import { apiGet } from '../api.js'
 import { DATASET_SEARCH_BASE, PEPTIDE_SEARCH_BASE } from '../config.js'
-import { formatBig, cleanInstrument } from '../utils/format.js'
+import { formatBig, cleanInstrument, datasetClassLabel } from '../utils/format.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -85,6 +89,7 @@ const q = ref('')
 const collection = ref('')
 const organism = ref('')
 const instrument = ref('')
+const datasetClass = ref('')
 const sort = ref('peptides')
 const page = ref(1)
 
@@ -98,6 +103,7 @@ const error = ref(false)
 const facetCollections = ref([])
 const facetOrganisms = ref([])
 const facetInstruments = ref([])
+const facetDatasetClasses = ref([])
 const collectionStats = ref([])
 
 const collectionCount = computed(() => facetCollections.value.length)
@@ -105,7 +111,7 @@ const totalDatasets = computed(() => total.value ?? 0)
 const totalPeptides = computed(() => collectionStats.value.reduce((s, c) => s + (c.total_peptides || 0), 0))
 const totalProteins = computed(() => collectionStats.value.reduce((s, c) => s + (c.total_proteins || 0), 0))
 
-const hasFilters = computed(() => !!(q.value || collection.value || organism.value || instrument.value))
+const hasFilters = computed(() => !!(q.value || collection.value || organism.value || instrument.value || datasetClass.value))
 
 async function loadFacets() {
   // Collections (with titles + headline stats) from dataset-search.
@@ -130,6 +136,14 @@ async function loadFacets() {
   } catch (e) {
     // ignore
   }
+  // biological dataset classes from the dataset-search facets (best-effort; the
+  // key only exists once the enrichment has classified the datasets)
+  try {
+    const df = await apiGet(DATASET_SEARCH_BASE, '/facets')
+    if (Array.isArray(df.dataset_class)) facetDatasetClasses.value = df.dataset_class
+  } catch (e) {
+    // ignore
+  }
 }
 
 // --- Shareable/deep-linkable URL state -------------------------------------
@@ -143,6 +157,7 @@ function currentQuery() {
   if (collection.value) qy.collection = collection.value
   if (organism.value) qy.organism = organism.value
   if (instrument.value) qy.instrument = instrument.value
+  if (datasetClass.value) qy.dataset_class = datasetClass.value
   if (sort.value && sort.value !== 'peptides') qy.sort = sort.value
   if (page.value && page.value > 1) qy.page = String(page.value)
   return qy
@@ -154,6 +169,7 @@ function applyQuery(qy) {
   collection.value = qy.collection || ''
   organism.value = qy.organism || ''
   instrument.value = qy.instrument || ''
+  datasetClass.value = qy.dataset_class || ''
   sort.value = qy.sort || 'peptides'
   page.value = qy.page ? Math.max(1, parseInt(qy.page, 10) || 1) : 1
 }
@@ -169,6 +185,7 @@ async function load() {
       collection: collection.value || undefined,
       organism: organism.value || undefined,
       instrument: instrument.value || undefined,
+      dataset_class: datasetClass.value || undefined,
       sort: sort.value,
       page: page.value,
     })
@@ -201,6 +218,7 @@ function clearFilters() {
   collection.value = ''
   organism.value = ''
   instrument.value = ''
+  datasetClass.value = ''
   reload()
 }
 

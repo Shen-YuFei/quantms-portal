@@ -79,6 +79,12 @@
             <div class="m-val">{{ fmt(summary.n_swissprot) }}</div>
             <div class="m-lab">SwissProt proteins<br><small>{{ fmt(summary.n_full) }} incl. TrEMBL <template v-if="summary.reference_proteome_upid">· {{ summary.reference_proteome_upid }}</template></small></div>
           </div>
+          <div v-if="summary.n_immuno_only != null" class="cc-metric">
+            <div class="m-val">{{ fmt(summary.n_immuno_only) }}</div>
+            <div class="m-lab">proteins with HLA-ligand evidence only<br>
+              <small>{{ fmt(summary.n_quantms_immuno_observed) }} with immunopeptide evidence — not protein-existence evidence</small>
+            </div>
+          </div>
         </div>
 
         <h3 class="cc-h3">Unobserved reviewed proteins
