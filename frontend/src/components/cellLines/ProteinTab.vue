@@ -35,7 +35,7 @@
           <div class="cl-fact">
             <div class="cl-fact-label">Lines</div>
             <div class="cl-fact-value">{{ s.n_lines_present ?? '—' }} / {{ s.n_lines_measured ?? '—' }}</div>
-            <div class="cl-fact-sub">detected in ≥1 study / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template></div>
+            <div class="cl-fact-sub">detected in ≥1 non-TMT study / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template><template v-if="s.n_lines_plex_only"> · {{ s.n_lines_plex_only }} TMT plex only</template></div>
           </div>
           <div class="cl-fact">
             <div class="cl-fact-label">Studies</div>
@@ -53,7 +53,7 @@
           <GroupToggle v-model="kind" />
         </div>
         <PresenceByGroup :lines="d.lines" :groups="groups" :kind="kind" />
-        <p class="cl-caption">Each dot is a line, “detected in k of N studies that measured it”. Not measured means no study of that line reported this gene; it is not the same as not detected.</p>
+        <p class="cl-caption">Each dot is a line, “detected in k of N studies that measured it”. Not measured means no study of that line reported this gene; it is not the same as not detected. TMT identifications are plex-level (not channel-specific), so a line seen only in TMT is shown as “identified in TMT plex only”, not detected.</p>
       </section>
 
       <section class="cl-card">
@@ -82,7 +82,7 @@
                 <td>{{ lineName[v.line] || v.line }}</td>
                 <td class="num">{{ fmt(v.l1) }}</td>
                 <td class="num">{{ fmt(v.l3) }}</td>
-                <td><span class="cl-badge" :class="`cl-p-${v.present_high ? 'high' : v.present ? 'detected' : 'absent'}`">{{ v.present_high ? '≥2 peptides' : v.present ? 'detected' : 'not detected' }}</span></td>
+                <td><span v-if="v.present && v.presence_scope === 'plex'" class="cl-badge cl-p-plex" title="TMT: identified in the plex; not specific to this channel">identified in plex</span><span v-else class="cl-badge" :class="`cl-p-${v.present_high ? 'high' : v.present ? 'detected' : 'absent'}`">{{ v.present_high ? '≥2 peptides' : v.present ? 'detected' : 'not detected' }}</span></td>
                 <td class="num">{{ v.n_pep ?? '—' }}</td>
                 <td>{{ v.acq || '—' }}</td>
                 <td><span v-if="v.comparability != null && v.comparability !== ''" class="cl-badge cl-badge-plain">{{ v.comparability }}</span><span v-else>—</span></td>

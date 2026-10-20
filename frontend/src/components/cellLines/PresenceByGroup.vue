@@ -9,7 +9,7 @@
     <div v-for="r in rows" :key="r.value" class="cl-presence-row" data-test="presence-row">
       <div class="cl-presence-label" :title="r.value">{{ r.value }}</div>
       <div class="cl-presence-bar" role="img"
-           :aria-label="`${r.value}: ${r.counts.high} detected with ≥2 peptides, ${r.counts.detected} detected, ${r.counts.absent} not detected, ${r.counts.unmeasured} not measured`">
+           :aria-label="`${r.value}: ${r.counts.high} detected with ≥2 peptides, ${r.counts.detected} detected, ${r.counts.plex} identified in TMT plex only, ${r.counts.absent} not detected, ${r.counts.unmeasured} not measured`">
         <span v-for="s in PRESENCE_STATES" v-show="r.counts[s.id]" :key="s.id" class="cl-seg" :class="`cl-p-${s.id}`"
               :style="{ width: `${(100 * r.counts[s.id]) / (r.total || 1)}%` }"
               :title="`${s.label}: ${r.counts[s.id]} of ${r.total} lines`"></span>

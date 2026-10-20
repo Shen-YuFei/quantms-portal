@@ -86,6 +86,7 @@
 .cl-badge-plain { background: var(--bg-alt); color: var(--text-secondary); border: 1px solid var(--border); }
 .cl-badge.cl-p-high { background: rgba(4, 120, 87, 0.12); color: #047857; }
 .cl-badge.cl-p-detected { background: rgba(16, 185, 129, 0.12); color: #047857; }
+.cl-badge.cl-p-plex { background: rgba(245, 158, 11, 0.15); color: #92400e; }
 .cl-badge.cl-p-absent { background: rgba(148, 163, 184, 0.18); color: var(--text-secondary); }
 .cl-flag { display: inline-block; margin-left: 4px; font-size: 0.68rem; padding: 0 4px; border-radius: 4px; background: rgba(124, 58, 237, 0.1); color: var(--violet); }
 .cl-flag-warn { background: rgba(251, 191, 36, 0.15); color: #b45309; }
@@ -98,6 +99,7 @@
 .cl-neg-bg { background: #d97706; }
 .cl-p-high { background: #047857; }
 .cl-p-detected { background: #6ee7b7; }
+.cl-p-plex { background: repeating-linear-gradient(45deg, #fde68a, #fde68a 3px, #fef3c7 3px, #fef3c7 6px); }
 .cl-p-absent { background: #cbd5e1; }
 .cl-p-unmeasured { background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 3px, #e2e8f0 3px, #e2e8f0 6px); }
 

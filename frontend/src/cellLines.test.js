@@ -70,7 +70,7 @@ describe('presence classification', () => {
       { group: 'primary_disease', value: 'NSCLC', n_lines: 6 },
     ]
     const rows = Object.fromEntries(presenceByGroup(lines, groups, 'lineage').map((r) => [r.value, r]))
-    expect(rows.Lung.counts).toEqual({ high: 1, detected: 1, absent: 1, unmeasured: 3 })
+    expect(rows.Lung.counts).toEqual({ high: 1, detected: 1, plex: 0, absent: 1, unmeasured: 3 })
     expect(rows.Lung.total).toBe(6)
     expect(rows.Lung.lines.map((l) => l.line)).toEqual(['L1', 'L2', 'L3'])
     expect(rows.Breast.counts).toEqual({ high: 0, detected: 0, absent: 1, unmeasured: 1 })
@@ -141,5 +141,16 @@ describe('summaries', () => {
   it('sorts with nulls last', () => {
     expect(sortRows([{ v: 1 }, { v: null }, { v: 3 }], 'v', 'desc').map((r) => r.v)).toEqual([3, 1, null])
     expect(sortRows([{ v: 'b' }, { v: 'a' }], 'v', 'asc').map((r) => r.v)).toEqual(['a', 'b'])
+  })
+})
+
+describe('TMT plex-level presence', () => {
+  it('classifies lines seen only in TMT as plex-only, not detected', () => {
+    expect(presenceState({ n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 })).toBe('plex')
+    expect(presenceState({ n_studies_measured: 2, n_studies_present: 1, n_studies_present_high: 0, n_studies_plex_identified: 1 })).toBe('detected')
+    const rows = presenceByGroup(
+      [{ line: 'a', lineage: 'Lung', n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }],
+      [{ group: 'lineage', value: 'Lung', n_lines: 2 }])
+    expect(rows[0].counts).toEqual({ high: 0, detected: 0, plex: 1, absent: 0, unmeasured: 1 })
   })
 })
