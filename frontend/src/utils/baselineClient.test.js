@@ -24,15 +24,15 @@ describe('createBaselineClient', () => {
     await expect(client.lookup('tissue', 'TP53')).resolves.toEqual({ name: 'P04637' })
     await expect(client.lookup('tissue', 'NOPE')).resolves.toBeNull()
     expect(client.isLoaded('tissue')).toBe(true)
-    expect(client.isLoaded('cell')).toBe(false)
+    expect(client.isLoaded('other')).toBe(false)
     expect(w.posted[0]).toMatchObject({ source: 'tissue', query: 'TP53', base: '/x/' })
   })
 
   it('rejects when the worker reports an error', async () => {
     const w = fakeWorker((m) => ({ id: m.id, error: 'Failed to fetch' }))
     const client = createBaselineClient({ createWorker: () => w })
-    await expect(client.lookup('cell', 'TP53')).rejects.toThrow('Failed to fetch')
-    expect(client.isLoaded('cell')).toBe(false)
+    await expect(client.lookup('tissue', 'TP53')).rejects.toThrow('Failed to fetch')
+    expect(client.isLoaded('tissue')).toBe(false)
   })
 
   it('falls back to loading in-thread when no worker is available', async () => {

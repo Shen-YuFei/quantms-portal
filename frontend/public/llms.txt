@@ -14,11 +14,16 @@
 - Dataset detail: https://portal.quantms.org/data/collections/{collection}/datasets/{accession}.json
 - FTP root: https://ftp.pride.ebi.ac.uk/pub/databases/pride/resources/proteomes/
 
+## Cancer Cell Line Proteome
+
+- App: https://portal.quantms.org/cell-lines
+- Per protein: presence and within-study rank (level 4) across cancer cell lines, lineages and cancer types; RNA (DepMap, HPA) as an external reference; validated co-expression network
+- Shareable URLs: https://portal.quantms.org/cell-lines?tab=protein&gene=VIM
+
 ## Baseline Expression
 
 - Protein expression browser: https://portal.quantms.org/baseline
 - Tissue expression data: 15,782 proteins across 30+ human tissues (iBAQ log2)
-- Cell line expression data available
 - Shareable URLs: https://portal.quantms.org/baseline?proteins=P50851,Q96HS1
 
 ## Dataset Identifiers
