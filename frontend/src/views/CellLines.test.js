@@ -150,7 +150,7 @@ describe('CellLines view', () => {
     expect(chart.props('data').datasets[0].data.map((p) => p.label)).toEqual(['L1', 'B1'])
     expect(w.find('[data-test="rna-scatter-note"]').text()).toContain('2 measured but non-detected lines')
     expect(w.find('[data-test="rho-hist"]').text()).toContain('93% percentile')
-    expect(w.text()).toContain('whether the protein was detected. 1 lines with RNA')
+    expect(w.text()).toContain('whether the protein was detected. 1 line with RNA')
     expect(w.text()).toContain('Edfors et al. 2016')
 
     await w.findAll('button').find((b) => b.text() === 'HPA cell lines').trigger('click')

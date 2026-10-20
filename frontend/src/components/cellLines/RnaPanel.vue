@@ -19,7 +19,7 @@
         <span v-if="g.n >= BOX_MIN_LINES" class="cl-hmed" :style="{ left: xPos(g.box.median) }" :title="`median ${fmt(g.box.median)}`"></span>
       </div>
     </div>
-    <p class="cl-caption">DepMap RNA, log2(TPM+1), for lines grouped by whether the protein was detected. <template v-if="detection.unmeasured">{{ detection.unmeasured }} lines with RNA but no protein measurement are not shown.</template></p>
+    <p class="cl-caption">DepMap RNA, log2(TPM+1), for lines grouped by whether the protein was detected. <template v-if="detection.unmeasured">{{ detection.unmeasured }} line{{ detection.unmeasured === 1 ? '' : 's' }} with RNA but no protein measurement {{ detection.unmeasured === 1 ? 'is' : 'are' }} not shown.</template></p>
 
     <div class="cl-card-head cl-subhead-row">
       <h4 class="cl-subhead">RNA and protein in detected lines</h4>
