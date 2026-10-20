@@ -85,7 +85,7 @@ const APP_ROUTES = {
   'dataset-search': '/apps/dataset-search',
   'peptide-search': '/apps/peptide-search',
   compass: '/apps/compass',
-  'cell-lines': '/cell-lines',
+  'cell-lines': '/apps/cell-lines',
   'differential-expression': '/differential-expression',
   statistics: '/statistics',
 }

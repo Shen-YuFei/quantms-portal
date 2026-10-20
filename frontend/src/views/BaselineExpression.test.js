@@ -61,7 +61,7 @@ describe('BaselineExpression view', () => {
     const w = mount(BaselineExpression, { global: { plugins: [router] } })
     await flushPromises()
     expect(w.find('select').exists()).toBe(false)
-    expect(w.find('a[href="/cell-lines"]').exists()).toBe(true)
+    expect(w.find('a[href="/apps/cell-lines"]').exists()).toBe(true)
     expect(w.find('input.search-input').attributes('aria-label')).toBeTruthy()
     expect(w.findAll('.tag-close').every((b) => b.attributes('aria-label'))).toBe(true)
   })

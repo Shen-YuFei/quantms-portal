@@ -12,7 +12,7 @@
           Add up to 5 proteins to compare side by side.
         </p>
         <p class="cell-lines-note">
-          Looking for cancer cell lines? Use the <router-link to="/cell-lines">Cancer Cell Line Proteome</router-link>.
+          Looking for cancer cell lines? Use the <router-link to="/apps/cell-lines">Cancer Cell Line Proteome</router-link>.
         </p>
       </div>
 

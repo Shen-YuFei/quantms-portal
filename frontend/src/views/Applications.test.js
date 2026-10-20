@@ -15,7 +15,7 @@ describe('Applications page', () => {
     expect(titles).toContain('Differential Expression')
     expect(titles).toContain('Proteome Compass')
     expect(titles).toContain('Cancer Cell Line Proteome')
-    expect(cards.find((c) => c.props('to') === '/cell-lines')).toBeTruthy()
+    expect(cards.find((c) => c.props('to') === '/apps/cell-lines')).toBeTruthy()
     // DE is obsolete: shown with a badge, not linked
     expect(cards.find((c) => c.props('to') === '/differential-expression')).toBeFalsy()
     const obsolete = w.find('.app-card-obsolete')
