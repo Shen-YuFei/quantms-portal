@@ -15,7 +15,7 @@
                 :title="`${r.value}: ${pct(r.frac)} detected, mean level 4 ${fmt(r.mean_l4)}`"></span>
         </span>
         <span class="cl-gdot-mean">{{ fmt(r.mean_l4) }}</span>
-        <span class="cl-gdot-count" data-test="dot-count">{{ r.detected }} / {{ r.measured }} measured<template v-if="r.plex"> · {{ r.plex }} TMT plex only</template></span>
+        <span class="cl-gdot-count" data-test="dot-count">{{ r.detected }} of {{ r.measured }} detected<template v-if="r.plex"> · {{ r.plex }} TMT plex only</template></span>
       </button>
       <div v-if="open[r.value]" class="cl-gdot-detail" data-test="dot-strip">
         <div class="cl-strip-head">

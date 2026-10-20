@@ -127,9 +127,9 @@
 .cl-hstrip { position: relative; height: 26px; }
 .cl-hstrip::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--border); }
 .cl-hgrid { position: absolute; top: 0; bottom: 0; border-left: 1px dashed rgba(148, 163, 184, 0.35); }
-.cl-hbox { position: absolute; top: 4px; bottom: 4px; background: rgba(99, 102, 241, 0.14); border: 1px solid rgba(99, 102, 241, 0.45); border-radius: 3px; }
-.cl-hmed { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--indigo); }
-.cl-hpt { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; box-shadow: 0 0 0 0.5px rgba(15, 23, 42, 0.25); }
+.cl-hbox { position: absolute; z-index: 1; top: 4px; bottom: 4px; background: rgba(99, 102, 241, 0.12); border: 1.5px solid rgba(67, 56, 202, 0.85); border-radius: 3px; pointer-events: none; }
+.cl-hmed { position: absolute; z-index: 2; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: #3730a3; }
+.cl-hpt { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; opacity: 0.7; box-shadow: 0 0 0 0.5px rgba(15, 23, 42, 0.25); }
 
 .cl-subhead { margin: 18px 0 8px; font-size: 0.95rem; }
 .cl-subhead-row { margin-bottom: 0; }
@@ -162,11 +162,11 @@
 .cl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 14px; background: rgba(99, 102, 241, 0.1); color: var(--indigo); font-size: 0.85rem; font-weight: 600; }
 .cl-chip-x { background: none; border: 0; cursor: pointer; color: inherit; font-size: 1rem; line-height: 1; padding: 0; }
 
-.cl-network { width: 100%; height: auto; display: block; }
+.cl-network { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto; }
 .cl-edge { stroke-opacity: 0.55; }
 .cl-edge-pos { stroke: var(--indigo); }
 .cl-edge-neg { stroke: #d97706; }
-.cl-edge-ranked { stroke-dasharray: 5 4; stroke-opacity: 0.3; }
+.cl-edge-ranked { stroke-dasharray: 5 4; }
 .cl-edge-key { width: 22px; height: 6px; margin-right: 4px; }
 .cl-node-ranked circle { stroke-opacity: 0.55; }
 .cl-node-complex circle { stroke: var(--violet); stroke-width: 3; }

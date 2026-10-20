@@ -5,13 +5,13 @@
     <h4 class="cl-subhead">Detection vs RNA</h4>
     <div class="cl-rna-axis">
       <span class="cl-axis-ticks">
-        <span v-for="t in rnaTicks" :key="t" class="cl-tick" :style="{ left: `${(t / rnaMax) * 100}%` }">{{ t }}</span>
+        <span v-for="t in rnaTicks" :key="t" class="cl-tick" :style="{ left: xPos(t) }">{{ t }}</span>
       </span>
     </div>
     <div v-for="g in detection.groups" :key="g.id" class="cl-rna-row" data-test="rna-detection-row">
       <div class="cl-presence-label">{{ g.label }} <span class="cl-muted">n={{ g.n }}</span></div>
       <div class="cl-hstrip" role="img" :aria-label="`${g.label}: ${g.n} lines, median log2(TPM+1) ${fmt(g.box?.median)}`">
-        <span v-for="t in rnaTicks" :key="t" class="cl-hgrid" :style="{ left: `${(t / rnaMax) * 100}%` }"></span>
+        <span v-for="t in rnaTicks" :key="t" class="cl-hgrid" :style="{ left: xPos(t) }"></span>
         <span v-if="g.n >= BOX_MIN_LINES" class="cl-hbox" :style="{ left: xPos(g.box.q1), width: xSpan(g.box.q1, g.box.q3) }"
               :title="`IQR ${fmt(g.box.q1)}–${fmt(g.box.q3)}`"></span>
         <span v-for="(v, i) in g.values" :key="i" class="cl-hpt" :class="`cl-p-${g.id}`"
@@ -19,7 +19,7 @@
         <span v-if="g.n >= BOX_MIN_LINES" class="cl-hmed" :style="{ left: xPos(g.box.median) }" :title="`median ${fmt(g.box.median)}`"></span>
       </div>
     </div>
-    <p class="cl-caption">DepMap RNA, log2(TPM+1), for lines grouped by whether the protein was detected.<template v-if="detection.unmeasured"> {{ detection.unmeasured }} lines with RNA but no protein measurement are not shown.</template></p>
+    <p class="cl-caption">DepMap RNA, log2(TPM+1), for lines grouped by whether the protein was detected. <template v-if="detection.unmeasured">{{ detection.unmeasured }} lines with RNA but no protein measurement are not shown.</template></p>
 
     <div class="cl-card-head cl-subhead-row">
       <h4 class="cl-subhead">RNA and protein in detected lines</h4>
@@ -105,15 +105,25 @@ const depmapLabel = computed(() => {
 const hpaLabel = computed(() => `Human Protein Atlas cell-line RNA, ${props.rna?.sources?.hpa_rna_celline?.licence || 'CC BY-SA 4.0'}`)
 
 const detection = computed(() => rnaByDetection(props.rna?.depmap))
-const rnaMax = computed(() => Math.max(1, Math.ceil(detection.value.max)))
+// Data range plus 4% padding each side so edge points stay inside the strip.
+const rnaDomain = computed(() => {
+  const { min, max } = detection.value
+  const pad = Math.max(0.2, (max - min) * 0.04)
+  return [min - pad, Math.max(max, min + 1) + pad]
+})
 const rnaTicks = computed(() => {
-  const step = Math.max(1, Math.ceil(rnaMax.value / 5))
+  const [lo, hi] = rnaDomain.value
+  const step = Math.max(1, Math.ceil((hi - lo) / 6))
   const out = []
-  for (let t = 0; t <= rnaMax.value; t += step) out.push(t)
+  for (let t = Math.ceil(lo); t <= hi; t += step) out.push(t)
   return out
 })
-const xPos = (v) => `${(Math.min(rnaMax.value, Math.max(0, v)) / rnaMax.value) * 100}%`
-const xSpan = (lo, hi) => `${Math.max(0.4, ((hi - lo) / rnaMax.value) * 100)}%`
+const xFrac = (v) => {
+  const [lo, hi] = rnaDomain.value
+  return (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)
+}
+const xPos = (v) => `${xFrac(v) * 100}%`
+const xSpan = (lo, hi) => `${Math.max(0.4, (xFrac(hi) - xFrac(lo)) * 100)}%`
 const jitter = (i) => (((i * 37) % 11) - 5) * 6
 
 // HPA rows carry no protein state, so detection comes from the gene's line rows.

@@ -165,6 +165,7 @@ export function rnaByDetection(rows) {
   const all = Object.values(values).flat()
   return {
     groups: RNA_STATES.map((s) => ({ ...s, values: values[s.id], n: values[s.id].length, box: boxStats(values[s.id]) })),
+    min: all.length ? Math.min(...all) : 0,
     max: all.length ? Math.max(...all) : 0,
     unmeasured,
   }
@@ -278,18 +279,17 @@ export function accessionUrl(acc) {
   return ''
 }
 
-/** Radial co-expression layout: strongest partners first from 12 o'clock and closest to the centre. */
-export function radialLayout(edges, { cx = 300, cy = 300, radius = 230, inner = 0.55 } = {}) {
+/** Co-expression partners on one circle, ordered by Z from 12 o'clock; strength is for edge width and opacity. */
+export function radialLayout(edges, { cx = 300, cy = 300, radius = 230 } = {}) {
   const n = edges.length
   const maxZ = Math.max(...edges.map((e) => Math.abs(e.z) || 0), 1)
-  return edges.map((e, i) => {
+  return [...edges].sort((a, b) => b.z - a.z).map((e, i) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(n, 1)
     const strength = Math.abs(e.z) / maxZ
-    const d = radius * (inner + (1 - inner) * (1 - strength))
     return {
       ...e, strength, angle,
-      x: cx + d * Math.cos(angle),
-      y: cy + d * Math.sin(angle),
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
       anchor: Math.cos(angle) >= 0 ? 'start' : 'end',
     }
   })

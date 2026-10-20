@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   compareParams, compare, presenceState, presenceTooltip, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, indigoScale,
+  detectedScatter, filterPartners, accessionUrl, indigoScale, radialLayout,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -189,6 +189,15 @@ describe('co-expression partners', () => {
     { partner: 'C', z: 4, validated: false, shared_complexes: ['26S proteasome'] },
     { partner: 'D', z: -3, validated: false, shared_complexes: [] },
   ]
+
+  it('puts every partner on one circle, ordered by Z', () => {
+    const nodes = radialLayout(partners, { cx: 0, cy: 0, radius: 100 })
+    expect(nodes.map((n) => n.partner)).toEqual(['A', 'B', 'C', 'D'])
+    for (const n of nodes) expect(Math.hypot(n.x, n.y)).toBeCloseTo(100)
+    expect(nodes[0].strength).toBe(1)
+    expect(nodes[3].strength).toBeCloseTo(3 / 8)
+    expect(radialLayout([{ partner: 'N', z: -5 }, { partner: 'P', z: 4 }]).map((n) => n.partner)).toEqual(['P', 'N'])
+  })
 
   it('filters all, beyond shared complexes and validated only', () => {
     expect(filterPartners(partners, 'all').map((p) => p.partner)).toEqual(['A', 'B', 'C', 'D'])

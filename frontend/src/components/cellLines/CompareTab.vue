@@ -84,6 +84,7 @@
               </span>
             </div>
             <ScatterChart :data="groupScatter" :options="groupOptions" :height="420" @point-click="(p) => p.label && $emit('select-gene', p.label)" />
+            <p class="cl-caption">Groups drawn from different studies can differ through acquisition (TMT identifications are plex-level, so TMT lines are rarely ranked 0). Genes with no DIA/DDA detection in either group are not listed.</p>
           </section>
           <section class="cl-card">
             <div class="cl-table-wrap cl-table-tall">

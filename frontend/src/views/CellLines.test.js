@@ -42,6 +42,7 @@ const rnaBody = {
     { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', log2_tpm: 6, l4_mean: 0.4, protein_state: 'detected' },
     { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', log2_tpm: 1, l4_mean: 0, protein_state: 'absent' },
     { line: 'CVCL_0004', name: 'L3', lineage: 'Lung', log2_tpm: 2, l4_mean: 0, protein_state: 'plex' },
+    { line: 'CVCL_0009', name: 'X9', lineage: 'Skin', log2_tpm: 12, l4_mean: null, protein_state: 'unmeasured' },
   ],
   hpa: [{ line: 'CVCL_0001', name: 'L1', lineage: 'Lung', ntpm: 255, l4_mean: 0.9 }, { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', ntpm: 3, l4_mean: 0 }],
   agreement: { rna_protein_spearman: 0.72, rna_protein_lines: 400, rna_sd: 2.1, flat_rna: false, icc: 0.81, reliability_class: 'reliable', n_lines_present: 2, n_lines_measured: 4, n_lines_plex_only: 1, rho_percentile: 0.93 },
@@ -113,7 +114,7 @@ describe('CellLines view', () => {
     const rows = w.findAll('[data-test="dot-row"]')
     expect(rows).toHaveLength(1)
     expect(rows[0].text()).toContain('Lung')
-    expect(rows[0].find('[data-test="dot-count"]').text()).toBe('1 / 3 measured · 1 TMT plex only')
+    expect(rows[0].find('[data-test="dot-count"]').text()).toBe('1 of 3 detected · 1 TMT plex only')
     expect(w.find('[data-test="dot-strip"]').exists()).toBe(false)
     await rows[0].find('button').trigger('click')
     const strip = w.find('[data-test="dot-strip"]')
@@ -149,6 +150,7 @@ describe('CellLines view', () => {
     expect(chart.props('data').datasets[0].data.map((p) => p.label)).toEqual(['L1', 'B1'])
     expect(w.find('[data-test="rna-scatter-note"]').text()).toContain('2 measured but non-detected lines')
     expect(w.find('[data-test="rho-hist"]').text()).toContain('93% percentile')
+    expect(w.text()).toContain('whether the protein was detected. 1 lines with RNA')
     expect(w.text()).toContain('Edfors et al. 2016')
 
     await w.findAll('button').find((b) => b.text() === 'HPA cell lines').trigger('click')
@@ -201,6 +203,7 @@ describe('CellLines view', () => {
     const sets = w.findComponent({ name: 'ScatterChart' }).props('data').datasets
     expect(sets.map((d) => [d.label, d.data.length])).toEqual([['largest differences', 1], ['x = y', 2], ['all genes', 3]])
     expect(sets[1].showLine).toBe(true)
+    expect(w.text()).toContain('Genes with no DIA/DDA detection in either group are not listed.')
     expect(w.find('[data-test="compare-groups-table"] td.cl-nowrap').text()).toBe('30 / 40')
   })
 
