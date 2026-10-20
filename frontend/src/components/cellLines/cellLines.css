@@ -99,7 +99,7 @@
 .cl-neg-bg { background: #d97706; }
 .cl-p-high { background: #047857; }
 .cl-p-detected { background: #6ee7b7; }
-.cl-p-plex { background: repeating-linear-gradient(45deg, #fde68a, #fde68a 3px, #fef3c7 3px, #fef3c7 6px); }
+.cl-p-nocall { background: #94a3b8; }
 .cl-p-absent { background: #cbd5e1; }
 .cl-p-unmeasured { background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 3px, #e2e8f0 3px, #e2e8f0 6px); }
 
@@ -107,13 +107,13 @@
 
 .cl-gdot-group { border-bottom: 1px solid var(--border-subtle); }
 .cl-gdot-row {
-  display: grid; grid-template-columns: minmax(110px, 220px) 30px 44px minmax(0, 1fr); gap: 4px 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(110px, 220px) 30px 130px minmax(0, 1fr); gap: 4px 12px; align-items: center;
   width: 100%; padding: 3px 0; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
 }
 .cl-gdot-row:hover { background: var(--bg-alt); }
 .cl-gdot-row:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
 .cl-gdot-cell { display: flex; justify-content: center; align-items: center; height: 24px; }
-.cl-gdot { display: inline-block; border-radius: 50%; border: 1px solid rgba(49, 46, 129, 0.35); flex: none; }
+.cl-gdot { display: inline-block; border-radius: 50%; border: 1px solid rgba(15, 23, 42, 0.3); flex: none; }
 .cl-gdot-mean { font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--text-secondary); text-align: right; }
 .cl-gdot-count { font-size: 0.78rem; color: var(--text-secondary); }
 .cl-gdot-detail { padding: 4px 0 10px; margin-left: min(25%, 230px); }
@@ -121,6 +121,8 @@
 .cl-strip-head .cl-axis-ticks { position: absolute; inset: 0; }
 .cl-ramp { display: inline-block; width: 70px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #e0e7ff, #312e81); }
 .cl-ramp-end { font-size: 0.75rem; }
+.cl-ramp-div { background: linear-gradient(90deg, #2563eb, #cbd5e1, #dc2626); }
+.cl-gdot-none { background: transparent; border-style: dashed; }
 
 .cl-axis-ticks { position: relative; height: 1.1em; }
 .cl-tick { position: absolute; transform: translateX(-50%); }
@@ -183,7 +185,7 @@
 
 @media (max-width: 900px) {
   .cl-grid-2 { grid-template-columns: minmax(0, 1fr); }
-  .cl-gdot-row { grid-template-columns: minmax(80px, 1fr) 26px 38px; }
+  .cl-gdot-row { grid-template-columns: minmax(80px, 1fr) 26px auto; }
   .cl-gdot-count { grid-column: 1 / 4; }
   .cl-gdot-detail { margin-left: 0; }
   .cl-rna-row, .cl-rna-axis { grid-template-columns: minmax(0, 1fr); }

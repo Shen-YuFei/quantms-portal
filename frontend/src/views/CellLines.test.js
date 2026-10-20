@@ -22,7 +22,11 @@ const vim = {
     { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.4, n_studies_measured: 1, n_studies_present: 1, n_studies_present_high: 0 },
   ],
   values: [{ study: 'S1', line: 'CVCL_0001', l1: 20.1, l3: 0.3, present: true, present_high: true, n_pep: 5, acq: 'DIA', comparability: 'ok' }],
-  groups: [{ group: 'lineage', group_value: 'Lung', n_lines: 2, mean_l4: 0.7, median_l4: 0.7, frac_present: 0.5 }],
+  groups: [
+    { kind: 'lineage', value: 'Lung', n_called: 2, n_detected: 1, enrichment: 0.35, n_studies: 2, n_lines: 3 },
+    { kind: 'lineage', value: 'Breast', n_called: 1, n_detected: 1, enrichment: null, n_studies: 1, n_lines: 1 },
+    { kind: 'primary_disease', value: 'NSCLC', n_called: 2, n_detected: 1, enrichment: -0.12, n_studies: 2, n_lines: 2 },
+  ],
   links: { uniprot: 'https://u', depmap: 'https://d', string: 'https://s', hpa_cell_line: 'https://h1', hpa_tissue: 'https://h2' },
 }
 const coexp = {
@@ -108,23 +112,37 @@ describe('CellLines view', () => {
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'protein', gene: 'DES' })
   })
 
-  it('shows one dot-plot row per lineage with plex-only lines counted apart', async () => {
+  it('shows one dot-plot row per lineage coloured by within-study enrichment', async () => {
     respond()
     const { w } = await mountAt('/apps/cell-lines?gene=VIM')
     const rows = w.findAll('[data-test="dot-row"]')
     expect(rows).toHaveLength(1)
     expect(rows[0].text()).toContain('Lung')
-    expect(rows[0].find('[data-test="dot-count"]').text()).toBe('1 of 3 detected · 1 TMT plex only')
+    expect(rows[0].find('[data-test="dot-count"]').text()).toBe('1 of 2 detected')
+    expect(rows[0].find('[data-test="dot-enrichment"]').text()).toBe('+0.35 vs other lines')
+    expect(rows[0].find('.cl-gdot').attributes('style')).toContain('background: rgb(')
+    expect(w.find('[data-test="dot-legend"]').text()).toContain('Colour: higher/lower than other lines measured in the same studies')
     expect(w.find('[data-test="dot-strip"]').exists()).toBe(false)
     await rows[0].find('button').trigger('click')
     const strip = w.find('[data-test="dot-strip"]')
-    expect(strip.findAll('.cl-hpt').map((p) => p.classes().find((c) => c.startsWith('cl-p-')))).toEqual(['cl-p-high', 'cl-p-absent', 'cl-p-plex'])
+    expect(strip.findAll('.cl-hpt').map((p) => p.classes().find((c) => c.startsWith('cl-p-')))).toEqual(['cl-p-high', 'cl-p-absent', 'cl-p-nocall'])
+    expect(strip.text()).toContain('No presence call')
     expect(strip.find('.cl-hpt').attributes('title')).toContain('L1: detected in 2 of 2 studies that measured it')
 
     const toggle = w.find('[data-test="dot-toggle"]')
-    expect(toggle.text()).toContain('Show 1 group with fewer than 3 lines')
+    expect(toggle.text()).toContain('Show 1 group with fewer than 3 lines or no within-study comparison')
     await toggle.trigger('click')
     expect(w.findAll('[data-test="dot-row"]').map((r) => r.find('.cl-presence-label').text())).toEqual(['Lung', 'Breast'])
+    expect(w.findAll('[data-test="dot-row"]')[1].find('[data-test="dot-count"]').text()).toBe('1 of 1 detected')
+  })
+
+  it('keeps acquisition wording out of the biology views of the protein tab', async () => {
+    respond()
+    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
+    await w.findAll('[data-test="dot-row"]')[0].find('button').trigger('click')
+    const biology = w.findAll('section.cl-card').filter((c) => !c.find('[data-test="values-table"]').exists())
+    for (const c of biology) expect(c.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
+    expect(w.text()).toContain('Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.')
   })
 
   it('reads and writes the grouping as by= in the URL', async () => {
@@ -145,12 +163,12 @@ describe('CellLines view', () => {
     const { w } = await mountAt('/apps/cell-lines?gene=VIM')
     expect(w.find('[data-test="rna-verdict"]').text()).toBe('Protein tracks mRNA across lines.')
     expect(w.findAll('[data-test="rna-detection-row"]').map((r) => r.find('.cl-presence-label').text()))
-      .toEqual(['Detected n=2', 'Identified in TMT plex only n=1', 'Not detected n=1'])
+      .toEqual(['Detected n=2', 'Not detected n=1'])
     const chart = w.findComponent({ name: 'ScatterChart' })
     expect(chart.props('data').datasets[0].data.map((p) => p.label)).toEqual(['L1', 'B1'])
     expect(w.find('[data-test="rna-scatter-note"]').text()).toContain('2 measured but non-detected lines')
     expect(w.find('[data-test="rho-hist"]').text()).toContain('93% percentile')
-    expect(w.text()).toContain('whether the protein was detected. 1 line with RNA')
+    expect(w.text()).toContain('whether the protein was detected. 1 line without a presence call is not shown. 1 line with RNA')
     expect(w.text()).toContain('Edfors et al. 2016')
 
     await w.findAll('button').find((b) => b.text() === 'HPA cell lines').trigger('click')
@@ -177,6 +195,25 @@ describe('CellLines view', () => {
     expect(w.text()).toContain('Gene NOPE is not in the atlas.')
   })
 
+  it('shows line distinctiveness within the same studies, without acquisition', async () => {
+    respond({
+      '/lines/CVCL_0001': {
+        line: { line: 'CVCL_0001', name: 'L1', lineage: 'Lung' },
+        studies: [{ study: 'S1', acq: ['TMT'], n_lines: 40, accessions: ['PXD000001'] }],
+        higher_than_lineage: [{ gene: 'VIM', delta: 0.42, n_studies_compared: 2, lineage_lines: 11, n_studies: 3 }],
+        lower_than_lineage: [{ gene: 'EPCAM', delta: -0.3, n_studies_compared: 1, lineage_lines: 9, n_studies: 2 }],
+        lineage_enriched_present: [],
+      },
+    })
+    const { w } = await mountAt('/apps/cell-lines?tab=line&line=CVCL_0001')
+    const tables = w.findAll('.cl-grid-2 table')
+    expect(tables[0].findAll('th').map((h) => h.text())).toEqual(['Gene', 'Δ vs lineage', 'Studies compared', 'Lineage peers'])
+    expect(tables[0].find('tbody tr').findAll('td').map((td) => td.text())).toEqual(['VIM', '+0.42', '2', '11'])
+    expect(tables[1].find('tbody tr').findAll('td').map((td) => td.text())).toEqual(['EPCAM', '−0.30', '1', '9'])
+    expect(w.find('[data-test="line-distinct-caption"]').text()).toBe('Compared with the rest of its lineage in the same studies (A49).')
+    expect(w.text()).not.toMatch(/TMT|Acquisition/)
+  })
+
   it('requests a line comparison from the URL selection', async () => {
     respond()
     await mountAt('/apps/cell-lines?tab=compare&lines=CVCL_0001,CVCL_0002')
@@ -189,22 +226,24 @@ describe('CellLines view', () => {
     const { w } = await mountAt('/apps/cell-lines?tab=compare&mode=groups&group=lineage&a=Lung&b=Breast')
     const call = apiGet.mock.calls.find((c) => c[1] === '/compare')
     expect(call[2]).toEqual({ group: 'lineage', a: 'Lung', b: 'Breast', background: true })
-    expect(w.text()).toContain('Descriptive difference in mean within-study rank; not a statistical test.')
+    expect(w.find('[data-test="compare-caption"]').text()).toBe('Differences are computed within each study, between lines measured together, then combined across studies (A49); descriptive, not a statistical test.')
   })
 
   it('plots background genes under the top genes with an x = y line', async () => {
     respond({
       '/compare': (p) => ({
         group: p.group, a: p.a, b: p.b, background: [['AAA', 0.1, 0.2], ['BBB', 0.5, 0.5], ['VIM', 0.9, 0.3]],
-        genes: [{ gene: 'VIM', delta: 0.6, mean_l4_a: 0.9, mean_l4_b: 0.3, n_lines_a: 30, n_lines_b: 40 }],
+        genes: [{ gene: 'VIM', delta: 0.6, mean_a: 0.9, mean_b: 0.3, n_studies_compared: 3, n_lines_a: 30, n_lines_b: 40, frac_detected_a: 0.5, frac_detected_b: null, reliability_class: 'reliable' }],
       }),
     })
     const { w } = await mountAt('/apps/cell-lines?tab=compare&mode=groups&group=lineage&a=Lung&b=Breast')
     const sets = w.findComponent({ name: 'ScatterChart' }).props('data').datasets
     expect(sets.map((d) => [d.label, d.data.length])).toEqual([['largest differences', 1], ['x = y', 2], ['all genes', 3]])
     expect(sets[1].showLine).toBe(true)
-    expect(w.text()).toContain('Genes with no DIA/DDA detection in either group are not listed.')
-    expect(w.find('[data-test="compare-groups-table"] td.cl-nowrap').text()).toBe('30 / 40')
+    expect(w.text()).not.toMatch(/TMT|DIA|DDA|acquisition/)
+    const table = w.find('[data-test="compare-groups-table"]')
+    expect(table.findAll('th').map((h) => h.text())).toEqual(['Gene', 'Δ', 'Mean A', 'Mean B', 'Studies', 'Lines A/B', 'Detected A/B', 'Reliability'])
+    expect(table.find('tbody tr').findAll('td').map((td) => td.text())).toEqual(['VIM', '0.60', '0.90', '0.30', '3', '30 / 40', '50% / —', 'reliable'])
   })
 
   it('writes the compare group selection to the URL', async () => {

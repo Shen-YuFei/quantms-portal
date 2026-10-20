@@ -69,7 +69,7 @@ export function errorMessage(err, what = 'This item') {
 export const PRESENCE_STATES = [
   { id: 'high', label: 'Detected, ≥2 peptides' },
   { id: 'detected', label: 'Detected' },
-  { id: 'plex', label: 'Identified in TMT plex only' },
+  { id: 'nocall', label: 'No presence call' },
   { id: 'absent', label: 'Not detected' },
   { id: 'unmeasured', label: 'Not measured' },
 ]
@@ -79,7 +79,7 @@ export function presenceState(row) {
   if (!row || !(row.n_studies_measured > 0)) return 'unmeasured'
   if (row.n_studies_present_high > 0) return 'high'
   if (row.n_studies_present > 0) return 'detected'
-  if (row.n_studies_plex_identified > 0) return 'plex'
+  if (row.n_studies_plex_identified > 0) return 'nocall'
   return 'absent'
 }
 
@@ -89,7 +89,7 @@ export function presenceTooltip(row) {
   if (!n) return `${name}: not measured`
   return `${name}: detected in ${row.n_studies_present || 0} of ${n} studies that measured it` +
     ` (≥2 peptides in ${row.n_studies_present_high || 0})` +
-    (row.n_studies_plex_identified ? `; identified in the TMT plex in ${row.n_studies_plex_identified} (not channel-specific)` : '')
+    (row.n_studies_plex_identified ? `; no per-line presence call in ${row.n_studies_plex_identified}` : '')
 }
 
 // Groups smaller than this are hidden by default (same minimum as specificity and compare).
@@ -117,10 +117,10 @@ export function boxStats(values) {
 }
 
 /**
- * Dot-plot rows per group value: detected k of N lines that measured the gene, TMT plex-only m
- * (not detected), mean level 4 over measured lines; sorted by mean level 4, small groups last.
+ * Dot-plot rows from the API group summary (A49): within-study enrichment vs the other lines of the
+ * same studies, detection among lines with a presence call; per-line rows feed the expanded strip.
  */
-export function groupDots(lines, kind = 'lineage') {
+export function groupDots(lines, groups, kind = 'lineage') {
   const byValue = new Map()
   for (const row of lines || []) {
     const state = presenceState(row)
@@ -129,37 +129,38 @@ export function groupDots(lines, kind = 'lineage') {
     if (!byValue.has(key)) byValue.set(key, [])
     byValue.get(key).push({ ...row, state })
   }
-  const out = []
-  for (const [value, rows] of byValue) {
-    const detected = rows.filter((r) => r.state === 'high' || r.state === 'detected').length
-    const plex = rows.filter((r) => r.state === 'plex').length
+  const out = (groups || []).filter((g) => g.kind === kind).map((g) => {
+    const rows = byValue.get(g.value) || []
     const l4 = rows.map((r) => r.l4_mean).filter((v) => Number.isFinite(v))
-    out.push({
-      value, rows, detected, plex, measured: rows.length,
-      frac: detected / rows.length,
-      mean_l4: l4.length ? l4.reduce((a, v) => a + v, 0) / l4.length : null,
+    const enrichment = Number.isFinite(g.enrichment) ? g.enrichment : null
+    return {
+      value: g.value, rows, enrichment, n_called: g.n_called || 0, n_detected: g.n_detected || 0,
+      n_lines: g.n_lines ?? rows.length, n_studies: g.n_studies ?? null,
+      frac: g.n_called > 0 ? (g.n_detected || 0) / g.n_called : null,
       box: l4.length >= BOX_MIN_LINES ? boxStats(l4) : null,
-      small: rows.length < MIN_GROUP_LINES,
-    })
-  }
-  return out.sort((a, b) => a.small - b.small || (b.mean_l4 ?? -1) - (a.mean_l4 ?? -1) || b.measured - a.measured)
+      small: enrichment === null || (g.n_lines ?? rows.length) < MIN_GROUP_LINES,
+    }
+  })
+  return out.sort((a, b) => a.small - b.small || (a.enrichment === null) - (b.enrichment === null) ||
+    (b.enrichment ?? 0) - (a.enrichment ?? 0) || b.n_lines - a.n_lines)
 }
 
 // RNA reference ------------------------------------------------------------------
 
 export const RNA_STATES = [
   { id: 'detected', label: 'Detected' },
-  { id: 'plex', label: 'Identified in TMT plex only' },
   { id: 'absent', label: 'Not detected' },
 ]
 
-/** DepMap log2(TPM+1) per protein state; lines the gene was not measured in are counted apart. */
+/** DepMap log2(TPM+1) per protein state; lines without a presence call or not measured are counted apart. */
 export function rnaByDetection(rows) {
   const values = Object.fromEntries(RNA_STATES.map((s) => [s.id, []]))
   let unmeasured = 0
+  let nocall = 0
   for (const r of rows || []) {
     if (!Number.isFinite(r.log2_tpm)) continue
     if (values[r.protein_state]) values[r.protein_state].push(r.log2_tpm)
+    else if (r.protein_state === 'plex') nocall++
     else unmeasured++
   }
   const all = Object.values(values).flat()
@@ -168,6 +169,7 @@ export function rnaByDetection(rows) {
     min: all.length ? Math.min(...all) : 0,
     max: all.length ? Math.max(...all) : 0,
     unmeasured,
+    nocall,
   }
 }
 
@@ -247,12 +249,20 @@ export function heatColor(v) {
   return `rgba(99, 102, 241, ${(0.06 + t * 0.6).toFixed(3)})`
 }
 
-/** Solid fill for a level-4 value (0..1): light to dark indigo. */
-export function indigoScale(v) {
-  if (!Number.isFinite(v)) return '#e2e8f0'
-  const t = Math.min(1, Math.max(0, v))
-  const mix = (lo, hi) => Math.round(lo + (hi - lo) * t)
-  return `rgb(${mix(224, 49)}, ${mix(231, 46)}, ${mix(255, 129)})`
+/** Diverging fill for a within-study enrichment: blue below 0, grey at 0, red above; clamped at ±0.5. */
+export function enrichmentColor(v) {
+  if (!Number.isFinite(v)) return 'transparent'
+  const t = Math.min(1, Math.max(-1, v / 0.5))
+  const [from, to] = t < 0 ? [[203, 213, 225], [37, 99, 235]] : [[203, 213, 225], [220, 38, 38]]
+  const k = Math.abs(t)
+  const mix = (i) => Math.round(from[i] + (to[i] - from[i]) * k)
+  return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`
+}
+
+/** Signed two-decimal number, e.g. +0.35. */
+export function signed(v, digits = 2) {
+  if (!Number.isFinite(v)) return '—'
+  return `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(digits)}`
 }
 
 /** Sort a copy of rows by key; nulls last. */

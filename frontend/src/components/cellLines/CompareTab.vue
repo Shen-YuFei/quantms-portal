@@ -71,7 +71,7 @@
       </section>
       <StatusBlock :loading="req.loading.value" :error="req.error.value" what="This comparison" :retry="load" />
       <template v-if="groupResult">
-        <p class="cl-caption cl-warn">Descriptive difference in mean within-study rank; not a statistical test.</p>
+        <p class="cl-caption cl-warn" data-test="compare-caption">Differences are computed within each study, between lines measured together, then combined across studies (A49); descriptive, not a statistical test.</p>
         <div v-if="!groupResult.genes?.length" class="cl-empty">No genes are measured in both groups.</div>
         <template v-else>
           <section class="cl-card">
@@ -84,13 +84,12 @@
               </span>
             </div>
             <ScatterChart :data="groupScatter" :options="groupOptions" :height="420" @point-click="(p) => p.label && $emit('select-gene', p.label)" />
-            <p class="cl-caption">Groups drawn from different studies can differ through acquisition (TMT identifications are plex-level, so TMT lines are rarely ranked 0). Genes with no DIA/DDA detection in either group are not listed.</p>
           </section>
           <section class="cl-card">
             <div class="cl-table-wrap cl-table-tall">
               <table class="cl-table" data-test="compare-groups-table">
                 <thead>
-                  <tr><th>Gene</th><th class="num">Δ</th><th class="num">Mean A</th><th class="num">Mean B</th><th class="num">Lines A/B</th><th class="num">Detected A/B</th><th class="num">Studies</th><th>Reliability</th></tr>
+                  <tr><th>Gene</th><th class="num">Δ</th><th class="num">Mean A</th><th class="num">Mean B</th><th class="num">Studies</th><th class="num">Lines A/B</th><th class="num">Detected A/B</th><th>Reliability</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="g in groupResult.genes" :key="g.gene">
@@ -100,11 +99,11 @@
                       <span v-if="g.contamination_prone" class="cl-flag cl-flag-warn" title="contamination-prone">C</span>
                     </td>
                     <td class="num" :class="g.delta >= 0 ? 'cl-pos' : 'cl-neg'">{{ fmt(g.delta) }}</td>
-                    <td class="num">{{ fmt(g.mean_l4_a) }}</td>
-                    <td class="num">{{ fmt(g.mean_l4_b) }}</td>
+                    <td class="num">{{ fmt(g.mean_a) }}</td>
+                    <td class="num">{{ fmt(g.mean_b) }}</td>
+                    <td class="num">{{ g.n_studies_compared ?? '—' }}</td>
                     <td class="num cl-nowrap">{{ g.n_lines_a ?? '—' }} / {{ g.n_lines_b ?? '—' }}</td>
-                    <td class="num cl-nowrap">{{ pct(g.frac_present_a) }} / {{ pct(g.frac_present_b) }}</td>
-                    <td class="num">{{ g.n_studies ?? '—' }}</td>
+                    <td class="num cl-nowrap">{{ pct(g.frac_detected_a) }} / {{ pct(g.frac_detected_b) }}</td>
                     <td>{{ g.reliability_class || '—' }}</td>
                   </tr>
                 </tbody>
@@ -162,7 +161,7 @@ const groupScatter = computed(() => ({
   datasets: [
     {
       label: 'largest differences', order: 0,
-      data: (groupResult.value?.genes || []).map((g) => ({ x: g.mean_l4_a, y: g.mean_l4_b, label: g.gene })),
+      data: (groupResult.value?.genes || []).map((g) => ({ x: g.mean_a, y: g.mean_b, label: g.gene })),
       backgroundColor: 'rgba(79, 70, 229, 0.8)', pointRadius: 3, pointHoverRadius: 5,
     },
     {
@@ -182,8 +181,8 @@ const groupOptions = computed(() => ({
     tooltip: { filter: (ctx) => !!ctx.raw.label, callbacks: { label: (ctx) => `${ctx.raw.label}: ${fmt(ctx.raw.x)} vs ${fmt(ctx.raw.y)}` } },
   },
   scales: {
-    x: { min: 0, max: 1, title: { display: true, text: `${props.a}: mean ${L4_AXIS.toLowerCase()}` } },
-    y: { min: 0, max: 1, title: { display: true, text: `${props.b}: mean ${L4_AXIS.toLowerCase()}` } },
+    x: { min: 0, max: 1, title: { display: true, text: `${props.a}: mean within-study rank` } },
+    y: { min: 0, max: 1, title: { display: true, text: `${props.b}: mean within-study rank` } },
   },
 }))
 

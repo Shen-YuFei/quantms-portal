@@ -35,7 +35,7 @@
           <div class="cl-fact">
             <div class="cl-fact-label">Lines</div>
             <div class="cl-fact-value">{{ s.n_lines_present ?? '—' }} / {{ s.n_lines_measured ?? '—' }}</div>
-            <div class="cl-fact-sub">detected in ≥1 non-TMT study / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template><template v-if="s.n_lines_plex_only"> · {{ s.n_lines_plex_only }} TMT plex only</template></div>
+            <div class="cl-fact-sub">detected / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template></div>
           </div>
           <div class="cl-fact">
             <div class="cl-fact-label">Studies</div>
@@ -52,8 +52,8 @@
           <h3>Detection and abundance by {{ kindLabel }}</h3>
           <GroupToggle v-model="kind" />
         </div>
-        <GroupDotPlot :lines="d.lines" :kind="kind" />
-        <p class="cl-caption">One row per {{ kindLabel }}, sorted by mean level 4 (each line's mean within-study percentile rank, 0 = lowest, 1 = highest; non-detected lines rank 0). Dot size is the fraction detected among lines that measured the gene; lines not measured are left out. TMT identifications are plex-level (not channel-specific), so lines seen only in a TMT plex are counted apart, not as detected. Click a row for its lines.</p>
+        <GroupDotPlot :lines="d.lines" :groups="d.groups" :kind="kind" />
+        <p class="cl-caption">One row per {{ kindLabel }}, sorted by how much higher its lines rank than the other lines measured in the same studies (A49). Click a row for its lines. Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.</p>
       </section>
 
       <section class="cl-card">

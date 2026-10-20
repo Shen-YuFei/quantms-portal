@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   compareParams, compare, presenceState, presenceTooltip, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, indigoScale, radialLayout,
+  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -89,10 +89,14 @@ describe('summaries', () => {
     expect(sortRows([{ v: 'b' }, { v: 'a' }], 'v', 'asc').map((r) => r.v)).toEqual(['a', 'b'])
   })
 
-  it('scales level 4 from light to dark indigo', () => {
-    expect(indigoScale(0)).toBe('rgb(224, 231, 255)')
-    expect(indigoScale(1)).toBe('rgb(49, 46, 129)')
-    expect(indigoScale(null)).toBe('#e2e8f0')
+  it('colours enrichment on a diverging scale clamped at ±0.5', () => {
+    expect(enrichmentColor(0)).toBe('rgb(203, 213, 225)')
+    expect(enrichmentColor(0.5)).toBe('rgb(220, 38, 38)')
+    expect(enrichmentColor(0.9)).toBe('rgb(220, 38, 38)')
+    expect(enrichmentColor(-0.5)).toBe('rgb(37, 99, 235)')
+    expect(enrichmentColor(null)).toBe('transparent')
+    expect(signed(0.354)).toBe('+0.35')
+    expect(signed(-0.1)).toBe('−0.10')
   })
 })
 
@@ -111,18 +115,27 @@ describe('group dot plot', () => {
     { line: 'B3', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.75, ...m(1, 0) },
   ]
 
-  it('counts detected of measured lines, with TMT plex-only apart and not-measured lines dropped', () => {
-    const lung = groupDots(lines, 'lineage').find((r) => r.value === 'Lung')
-    expect(lung).toMatchObject({ detected: 2, plex: 1, measured: 4, frac: 0.5 })
-    expect(lung.mean_l4).toBeCloseTo(0.375)
-    expect(lung.rows.map((r) => r.state)).toEqual(['high', 'detected', 'plex', 'absent'])
+  const groups = [
+    { kind: 'lineage', value: 'Lung', n_called: 4, n_detected: 2, enrichment: 0.12, n_studies: 3, n_lines: 5 },
+    { kind: 'lineage', value: 'Breast', n_called: 3, n_detected: 2, enrichment: 0.35, n_studies: 2, n_lines: 3 },
+    { kind: 'lineage', value: 'Skin', n_called: 2, n_detected: 2, enrichment: 0.4, n_studies: 1, n_lines: 2 },
+    { kind: 'lineage', value: 'Bone', n_called: 0, n_detected: 0, enrichment: null, n_studies: 1, n_lines: 4 },
+    { kind: 'primary_disease', value: 'IDC', n_called: 3, n_detected: 2, enrichment: -0.2, n_studies: 2, n_lines: 3 },
+  ]
+
+  it('uses the API group summary and attaches the per-line rows', () => {
+    const lung = groupDots(lines, groups, 'lineage').find((r) => r.value === 'Lung')
+    expect(lung).toMatchObject({ n_called: 4, n_detected: 2, frac: 0.5, enrichment: 0.12, n_lines: 5, small: false })
+    expect(lung.rows.map((r) => r.state)).toEqual(['high', 'detected', 'nocall', 'absent'])
+    const bone = groupDots(lines, groups, 'lineage').find((r) => r.value === 'Bone')
+    expect(bone).toMatchObject({ frac: null, enrichment: null, small: true, rows: [] })
   })
 
-  it('sorts by mean level 4 and puts groups under 3 lines last, flagged small', () => {
-    const rows = groupDots(lines, 'lineage')
-    expect(rows.map((r) => r.value)).toEqual(['Breast', 'Lung', 'Skin'])
-    expect(rows.map((r) => r.small)).toEqual([false, false, true])
-    expect(groupDots(lines, 'primary_disease').map((r) => r.value)).toEqual(['IDC', 'NSCLC', 'Melanoma', 'SCLC'])
+  it('sorts by enrichment and hides groups under 3 lines or without enrichment', () => {
+    const rows = groupDots(lines, groups, 'lineage')
+    expect(rows.map((r) => r.value)).toEqual(['Breast', 'Lung', 'Skin', 'Bone'])
+    expect(rows.map((r) => r.small)).toEqual([false, false, true, true])
+    expect(groupDots(lines, groups, 'primary_disease').map((r) => r.value)).toEqual(['IDC'])
   })
 
   it('maps the by= URL param to a group kind and back', () => {
@@ -160,7 +173,8 @@ describe('RNA reference', () => {
 
   it('groups RNA by protein state', () => {
     const d = rnaByDetection(depmap)
-    expect(d.groups.map((g) => [g.id, g.n])).toEqual([['detected', 2], ['plex', 1], ['absent', 1]])
+    expect(d.groups.map((g) => [g.id, g.n])).toEqual([['detected', 2], ['absent', 1]])
+    expect(d.nocall).toBe(1)
     expect(d.unmeasured).toBe(1)
     expect(d.max).toBe(5)
   })
@@ -221,11 +235,12 @@ describe('atlas studies', () => {
   })
 })
 
-describe('TMT plex-level presence', () => {
-  it('classifies lines seen only in TMT as plex-only, not detected', () => {
-    expect(presenceState({ n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 })).toBe('plex')
-    expect(presenceState({ n_studies_measured: 2, n_studies_present: 1, n_studies_present_high: 0, n_studies_plex_identified: 1 })).toBe('detected')
-    const rows = groupDots([{ line: 'a', lineage: 'Lung', l4_mean: 0, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }])
-    expect(rows[0]).toMatchObject({ detected: 0, plex: 1, measured: 1, frac: 0 })
+describe('lines without a per-line presence call', () => {
+  it('are "no call", not detected, and the tooltip names no acquisition', () => {
+    const row = { name: 'X', n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }
+    expect(presenceState(row)).toBe('nocall')
+    expect(presenceState({ ...row, n_studies_measured: 2, n_studies_present: 1 })).toBe('detected')
+    expect(presenceTooltip(row)).toBe('X: detected in 0 of 1 studies that measured it (≥2 peptides in 0); no per-line presence call in 1')
+    expect(presenceTooltip(row)).not.toMatch(/TMT|plex/)
   })
 })
