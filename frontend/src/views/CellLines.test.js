@@ -167,7 +167,7 @@ describe('/apps/coexpression redirect', () => {
     expect(router.currentRoute.value.path).toBe('/cell-lines')
     expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression', gene: 'PSMA1' })
     await router.push('/apps/coexpression?protein=P25786')
-    expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression', gene: 'P25786' })
+    expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression' })
     await router.push('/apps/coexpression')
     expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression' })
   })

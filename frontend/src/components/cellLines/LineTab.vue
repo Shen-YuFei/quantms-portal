@@ -8,7 +8,7 @@
       <section class="cl-card" data-test="line-header">
         <div class="cl-card-head">
           <h2 class="cl-title">{{ m.name }}</h2>
-          <span v-if="m.flagged_samples > 0" class="tag tag-warning" :title="`${m.flagged_samples} sample(s) carry a QC flag; shown, not excluded`">{{ m.flagged_samples }} flagged sample{{ m.flagged_samples === 1 ? '' : 's' }}</span>
+          <span v-if="m.flagged_samples > 0" class="tag tag-warning" :title="`${m.flagged_samples} sample(s) carry a QC flag; shown, not excluded`">{{ m.flagged_samples }}{{ m.samples ? ` of ${m.samples}` : '' }} sample{{ (m.samples || m.flagged_samples) === 1 ? '' : 's' }} flagged</span>
           <span v-if="m.sex_flag" class="tag tag-warning" title="Y-chromosome proteins detected; check the annotated sex">sex flag</span>
           <span v-if="m.identity_verdict" class="tag tag-indigo" title="Proteome identity check verdict">identity: {{ m.identity_verdict }}</span>
         </div>

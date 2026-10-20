@@ -18,7 +18,8 @@ export const routes = [
   { path: '/apps/compass', component: () => import('./views/ProteomeCompass.vue'), meta: { title: 'Proteome Compass' } },
   { path: '/cell-lines', component: () => import('./views/CellLines.vue'), meta: { title: 'Cancer Cell Line Proteome' } },
   { path: '/apps/coexpression', redirect: (to) => {
-    const gene = to.query.gene || to.query.protein
+    // old links carried a UniProt accession in `protein`; the atlas is keyed by gene symbol
+    const gene = to.query.gene
     return { path: '/cell-lines', query: gene ? { tab: 'coexpression', gene } : { tab: 'coexpression' } }
   } },
   // Legacy placeholder: full-text search lives in Dataset Search.
