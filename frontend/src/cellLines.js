@@ -69,6 +69,7 @@ export function errorMessage(err, what = 'This item') {
 export const PRESENCE_STATES = [
   { id: 'high', label: 'Detected, ≥2 peptides' },
   { id: 'detected', label: 'Detected' },
+  { id: 'plex', label: 'Identified in TMT plex only' },
   { id: 'absent', label: 'Not detected' },
   { id: 'unmeasured', label: 'Not measured' },
 ]
@@ -78,6 +79,7 @@ export function presenceState(row) {
   if (!row || !(row.n_studies_measured > 0)) return 'unmeasured'
   if (row.n_studies_present_high > 0) return 'high'
   if (row.n_studies_present > 0) return 'detected'
+  if (row.n_studies_plex_identified > 0) return 'plex'
   return 'absent'
 }
 
@@ -86,7 +88,8 @@ export function presenceTooltip(row) {
   const n = row.n_studies_measured || 0
   if (!n) return `${name}: not measured`
   return `${name}: detected in ${row.n_studies_present || 0} of ${n} studies that measured it` +
-    ` (≥2 peptides in ${row.n_studies_present_high || 0})`
+    ` (≥2 peptides in ${row.n_studies_present_high || 0})` +
+    (row.n_studies_plex_identified ? `; identified in the TMT plex in ${row.n_studies_plex_identified} (not channel-specific)` : '')
 }
 
 /**
@@ -106,9 +109,9 @@ export function presenceByGroup(lines, groups, kind = 'lineage') {
   const out = []
   for (const value of keys) {
     const rows = (byValue.get(value) || []).map((r) => ({ ...r, state: presenceState(r) }))
-    const counts = { high: 0, detected: 0, absent: 0, unmeasured: 0 }
+    const counts = { high: 0, detected: 0, plex: 0, absent: 0, unmeasured: 0 }
     for (const r of rows) counts[r.state]++
-    const measured = counts.high + counts.detected + counts.absent
+    const measured = counts.high + counts.detected + counts.plex + counts.absent
     const total = Math.max(totals.get(value) ?? 0, rows.length)
     counts.unmeasured = total - measured
     out.push({ value, total, counts, lines: rows.filter((r) => r.state !== 'unmeasured') })
