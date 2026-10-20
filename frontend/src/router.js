@@ -16,7 +16,12 @@ export const routes = [
   { path: '/apps/dataset-search', component: () => import('./views/DatasetSearch.vue'), meta: { title: 'Dataset Search' } },
   { path: '/apps/peptide-search', component: () => import('./views/PeptideSearch.vue'), meta: { title: 'Peptide & Protein Search' } },
   { path: '/apps/compass', component: () => import('./views/ProteomeCompass.vue'), meta: { title: 'Proteome Compass' } },
-  { path: '/apps/coexpression', component: () => import('./views/Coexpression.vue'), meta: { title: 'Protein Co-expression' } },
+  { path: '/cell-lines', component: () => import('./views/CellLines.vue'), meta: { title: 'Cancer Cell Line Proteome' } },
+  { path: '/apps/coexpression', redirect: (to) => {
+    // old links carried a UniProt accession in `protein`; the atlas is keyed by gene symbol
+    const gene = to.query.gene
+    return { path: '/cell-lines', query: gene ? { tab: 'coexpression', gene } : { tab: 'coexpression' } }
+  } },
   // Legacy placeholder: full-text search lives in Dataset Search.
   { path: '/search', redirect: (to) => ({ path: '/apps/dataset-search', query: to.query.q ? { q: to.query.q } : {} }) },
   { path: '/statistics', component: () => import('./views/Statistics.vue'), meta: { title: 'Statistics' } },

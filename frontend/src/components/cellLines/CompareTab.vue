@@ -1,0 +1,184 @@
+<template>
+  <div>
+    <div class="cl-toolbar">
+      <div class="cl-toggle" role="group" aria-label="Compare mode">
+        <button type="button" :class="{ active: mode === 'lines' }" :aria-pressed="mode === 'lines'" @click="setMode('lines')">Cell lines</button>
+        <button type="button" :class="{ active: mode === 'groups' }" :aria-pressed="mode === 'groups'" @click="setMode('groups')">Lineages / diseases</button>
+      </div>
+    </div>
+
+    <template v-if="mode === 'lines'">
+      <section class="cl-card">
+        <div class="cl-compare-pick">
+          <AtlasPicker v-if="lines.length < MAX_COMPARE_LINES" id="cl-compare-line" kind="line" :label="`Add a cell line (${lines.length}/${MAX_COMPARE_LINES})`"
+                       placeholder="e.g. MCF7, A549, CVCL_0023" @select="addLine" />
+          <div class="cl-chips">
+            <span v-for="l in lines" :key="l" class="cl-chip">
+              {{ lineNames[l] || l }}
+              <button type="button" class="cl-chip-x" :aria-label="`Remove ${lineNames[l] || l}`" @click="removeLine(l)">&times;</button>
+            </span>
+          </div>
+        </div>
+        <p v-if="lines.length < 2" class="cl-muted">Pick 2 to {{ MAX_COMPARE_LINES }} lines to compare.</p>
+      </section>
+      <StatusBlock :loading="req.loading.value" :error="req.error.value" what="This comparison" :retry="load" />
+      <section v-if="lineResult" class="cl-card">
+        <div class="cl-card-head"><h3>Genes with a level 4 value in every selected line, by spread</h3></div>
+        <div v-if="!lineResult.genes?.length" class="cl-empty">No gene has a level 4 value in all selected lines.</div>
+        <div v-else class="cl-table-wrap">
+          <table class="cl-table" data-test="compare-lines-table">
+            <thead>
+              <tr><th>Gene</th><th v-for="l in lineResult.lines" :key="l.line" class="num">{{ l.name || l.line }}</th><th class="num">Spread</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in lineResult.genes" :key="g.gene">
+                <td><button type="button" class="cl-linkish" @click="$emit('select-gene', g.gene)">{{ g.gene }}</button></td>
+                <td v-for="l in lineResult.lines" :key="l.line" class="num cl-heat" :style="{ background: heatColor(g.l4[l.line]) }">{{ fmt(g.l4[l.line]) }}</td>
+                <td class="num">{{ fmt(g.spread) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="cl-caption">Values are corrected level 4 ({{ L4_AXIS.toLowerCase() }}); lines need not share a study.</p>
+      </section>
+    </template>
+
+    <template v-else>
+      <section class="cl-card">
+        <div class="cl-compare-groups">
+          <label class="cl-ctl">
+            <span class="cl-ctl-label">Group by</span>
+            <select :value="group" aria-label="Group by" @change="update({ group: $event.target.value, a: '', b: '' })">
+              <option v-for="k in GROUP_KINDS" :key="k.id" :value="k.id">{{ k.label }}</option>
+            </select>
+          </label>
+          <label class="cl-ctl">
+            <span class="cl-ctl-label">A</span>
+            <select :value="a" aria-label="Group A" @change="update({ a: $event.target.value })">
+              <option value="">Choose…</option>
+              <option v-for="o in options" :key="o.value" :value="o.value">{{ o.value }} ({{ o.n_lines }})</option>
+            </select>
+          </label>
+          <label class="cl-ctl">
+            <span class="cl-ctl-label">B</span>
+            <select :value="b" aria-label="Group B" @change="update({ b: $event.target.value })">
+              <option value="">Choose…</option>
+              <option v-for="o in options" :key="o.value" :value="o.value">{{ o.value }} ({{ o.n_lines }})</option>
+            </select>
+          </label>
+        </div>
+        <p v-if="a && a === b" class="cl-muted">Pick two different groups.</p>
+      </section>
+      <StatusBlock :loading="req.loading.value" :error="req.error.value" what="This comparison" :retry="load" />
+      <template v-if="groupResult">
+        <p class="cl-caption cl-warn">Descriptive difference in mean within-study rank; not a statistical test.</p>
+        <div v-if="!groupResult.genes?.length" class="cl-empty">No genes are measured in both groups.</div>
+        <div v-else class="cl-grid-2">
+          <section class="cl-card">
+            <div class="cl-card-head"><h3>{{ groupResult.a }} vs {{ groupResult.b }}</h3></div>
+            <ScatterChart :data="groupScatter" :options="groupOptions" :height="360" @point-click="(p) => $emit('select-gene', p.label)" />
+          </section>
+          <section class="cl-card">
+            <div class="cl-table-wrap cl-table-tall">
+              <table class="cl-table" data-test="compare-groups-table">
+                <thead>
+                  <tr><th>Gene</th><th class="num">Δ</th><th class="num">Mean A</th><th class="num">Mean B</th><th class="num">Lines A/B</th><th class="num">Detected A/B</th><th class="num">Studies</th><th>Reliability</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="g in groupResult.genes" :key="g.gene">
+                    <td>
+                      <button type="button" class="cl-linkish" @click="$emit('select-gene', g.gene)">{{ g.gene }}</button>
+                      <span v-if="g.is_family" class="cl-flag" title="family row">F</span>
+                      <span v-if="g.contamination_prone" class="cl-flag cl-flag-warn" title="contamination-prone">C</span>
+                    </td>
+                    <td class="num" :class="g.delta >= 0 ? 'cl-pos' : 'cl-neg'">{{ fmt(g.delta) }}</td>
+                    <td class="num">{{ fmt(g.mean_l4_a) }}</td>
+                    <td class="num">{{ fmt(g.mean_l4_b) }}</td>
+                    <td class="num">{{ g.n_lines_a ?? '—' }} / {{ g.n_lines_b ?? '—' }}</td>
+                    <td class="num">{{ pct(g.frac_present_a) }} / {{ pct(g.frac_present_b) }}</td>
+                    <td class="num">{{ g.n_studies ?? '—' }}</td>
+                    <td>{{ g.reliability_class || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </template>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch } from 'vue'
+import ScatterChart from '../ScatterChart.vue'
+import AtlasPicker from './AtlasPicker.vue'
+import StatusBlock from './StatusBlock.vue'
+import { useRequest } from './useRequest.js'
+import {
+  MAX_COMPARE_LINES, GROUP_KINDS, L4_AXIS, compare, compareParams, fmt, pct, heatColor,
+} from '../../cellLines.js'
+
+const props = defineProps({
+  mode: { type: String, default: 'lines' },
+  lines: { type: Array, default: () => [] },
+  group: { type: String, default: 'lineage' },
+  a: { type: String, default: '' },
+  b: { type: String, default: '' },
+  groups: { type: Array, default: () => [] },
+})
+const emit = defineEmits(['update', 'select-gene'])
+
+const req = useRequest(compare)
+const selection = computed(() => ({ mode: props.mode, lines: props.lines, group: props.group, a: props.a, b: props.b }))
+const paramsKey = computed(() => JSON.stringify(compareParams(selection.value)))
+
+// DuckDB MAP columns may arrive as {key: [...], value: [...]} instead of a plain object.
+function toMap(m) {
+  if (m && Array.isArray(m.key) && Array.isArray(m.value)) return Object.fromEntries(m.key.map((k, i) => [k, m.value[i]]))
+  return m || {}
+}
+const lineResult = computed(() => {
+  const r = req.data.value
+  if (!r || props.mode !== 'lines' || !r.lines) return null
+  const order = new Map(props.lines.map((l, i) => [l, i]))
+  const lines = [...r.lines].sort((x, y) => (order.get(x.line) ?? 99) - (order.get(y.line) ?? 99))
+  return { lines, genes: (r.genes || []).map((g) => ({ ...g, l4: toMap(g.l4) })) }
+})
+const picked = ref({})
+const lineNames = computed(() => ({ ...picked.value, ...Object.fromEntries((req.data.value?.lines || []).map((l) => [l.line, l.name])) }))
+const groupResult = computed(() => (props.mode === 'groups' && req.data.value?.group ? req.data.value : null))
+
+const options = computed(() => props.groups.filter((g) => g.group === props.group))
+const groupScatter = computed(() => ({
+  datasets: [{
+    label: 'genes',
+    data: (groupResult.value?.genes || []).map((g) => ({ x: g.mean_l4_a, y: g.mean_l4_b, label: g.gene })),
+    backgroundColor: 'rgba(99, 102, 241, 0.6)', pointRadius: 3,
+  }],
+}))
+const groupOptions = computed(() => ({
+  plugins: {
+    legend: { display: false },
+    tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label}: ${fmt(ctx.raw.x)} vs ${fmt(ctx.raw.y)}` } },
+  },
+  scales: {
+    x: { min: 0, max: 1, title: { display: true, text: `${props.a}: mean ${L4_AXIS.toLowerCase()}` } },
+    y: { min: 0, max: 1, title: { display: true, text: `${props.b}: mean ${L4_AXIS.toLowerCase()}` } },
+  },
+}))
+
+const update = (patch) => emit('update', patch)
+function setMode(mode) { if (mode !== props.mode) update({ mode }) }
+function addLine(line, item) {
+  if (item?.name) picked.value = { ...picked.value, [line]: item.name }
+  if (!props.lines.includes(line)) update({ lines: [...props.lines, line].slice(0, MAX_COMPARE_LINES) })
+}
+function removeLine(line) { update({ lines: props.lines.filter((l) => l !== line) }) }
+
+function load() {
+  if (compareParams(selection.value)) req.run(selection.value)
+  else req.reset()
+}
+watch(paramsKey, load, { immediate: true })
+</script>

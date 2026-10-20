@@ -5,7 +5,6 @@
 
 export const BASELINE_SOURCES = {
   tissue: 'data/tissueJson.json.gz',
-  cell: 'data/cellJson.json.gz',
 }
 
 /** Fetch a JSON file that may be served gzip-compressed without Content-Encoding. */

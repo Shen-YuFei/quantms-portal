@@ -8,20 +8,17 @@
           Baseline Protein Expression
         </h1>
         <p style="font-size: 15px; color: var(--text-secondary); max-width: 640px;">
-          Compare protein expression across human tissues and cell lines using iBAQ log2 intensities.
+          Compare protein expression across human tissues using iBAQ log2 intensities.
           Add up to 5 proteins to compare side by side.
+        </p>
+        <p class="cell-lines-note">
+          Looking for cancer cell lines? Use the <router-link to="/cell-lines">Cancer Cell Line Proteome</router-link>.
         </p>
       </div>
 
       <!-- Search bar -->
       <div class="search-card">
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-          <div style="position: relative; flex: 1; min-width: 180px;">
-            <select v-model="sourceType" class="source-select" aria-label="Expression source" @change="clearResults">
-              <option value="tissue">Tissue (Human)</option>
-              <option value="cell">Cell Line (Human)</option>
-            </select>
-          </div>
           <div style="position: relative; flex: 2; min-width: 220px;">
             <input
               v-model="query"
@@ -60,7 +57,7 @@
 
       <!-- Loading data indicator -->
       <div v-if="loadingData" style="text-align: center; padding: 48px 0; color: var(--text-muted); font-size: 14px;">
-        Loading expression database… ({{ sourceType === 'tissue' ? '~4 MB' : '~20 MB' }})
+        Loading expression database… (~4 MB)
       </div>
 
       <!-- Error -->
@@ -80,7 +77,7 @@
           </span>
           <span class="tag tag-indigo" style="font-size: 12px;">iBAQ log₂</span>
           <span class="tag" style="font-size: 12px; background: rgba(99,102,241,0.08); color: var(--text-secondary);">
-            {{ sourceLabel }}
+            Human Tissues
           </span>
         </div>
 
@@ -92,7 +89,7 @@
           </div>
           <div class="summary-stat">
             <div class="stat-value" style="font-size: 18px;">{{ allTissues.length }}</div>
-            <div class="stat-label">{{ sourceType === 'tissue' ? 'Tissues' : 'Cell Lines' }}</div>
+            <div class="stat-label">Tissues</div>
           </div>
           <div class="summary-stat">
             <div class="stat-value" style="font-size: 18px;">{{ expressionRange }}</div>
@@ -105,7 +102,7 @@
           <table class="expr-table">
             <thead>
               <tr>
-                <th>{{ sourceType === 'tissue' ? 'Tissue' : 'Cell Line' }}</th>
+                <th>Tissue</th>
                 <th style="text-align: center;">Samples</th>
                 <th v-for="(p, i) in proteins" :key="p.name" style="text-align: center; min-width: 80px;">
                   <span :style="{ color: tagColors[i], fontWeight: 700 }">{{ p.name }}</span>
@@ -229,7 +226,6 @@ const route = useRoute()
 const tagColors = ['#409eff', '#6366f1', '#7c3aed', '#f59e0b', '#10b981']
 
 const query = ref('')
-const sourceType = ref('tissue')
 const loadingData = ref(false)
 const searching = ref(false)
 const errorMsg = ref('')
@@ -241,18 +237,14 @@ function updateUrl() {
   const names = proteins.value.map(p => p.name)
   const q = {}
   if (names.length) q.proteins = names.join(',')
-  if (sourceType.value !== 'tissue') q.source = sourceType.value
   router.replace({ path: '/baseline', query: q })
 }
 
 watch(proteins, updateUrl, { deep: true })
-watch(sourceType, updateUrl)
 
 // Load proteins from URL on mount
 onMounted(async () => {
   const urlProteins = route.query.proteins
-  const urlSource = route.query.source
-  if (urlSource === 'cell') sourceType.value = 'cell'
   if (urlProteins) {
     const names = urlProteins.split(',').map(s => s.trim()).filter(Boolean)
     for (const name of names.slice(0, 5)) {
@@ -265,13 +257,10 @@ onMounted(async () => {
 
 const examples = ['P50851', 'Q96HS1', 'Q14114', 'P04637']
 
-const sourceLabel = computed(() =>
-  sourceType.value === 'tissue' ? 'Human Tissues' : 'Human Cell Lines'
-)
 
 // ── Expression databases ──
-// Downloaded and parsed once per source inside a Web Worker (the cell-line file
-// is ~120 MB of JSON once decompressed); only the requested entries come back.
+// Downloaded and parsed once inside a Web Worker; only the requested entries come back.
+const SOURCE = 'tissue'
 const baseline = createBaselineClient({ base: import.meta.env.BASE_URL })
 onBeforeUnmount(() => baseline.terminate())
 
@@ -302,12 +291,9 @@ async function addProtein() {
 
   errorMsg.value = ''
   searching.value = true
-  const source = sourceType.value
 
   try {
-    const entry = await lookupEntry(source, q)
-    // The source was switched while the database was loading: drop this add.
-    if (source !== sourceType.value) return
+    const entry = await lookupEntry(SOURCE, q)
     if (!entry) {
       errorMsg.value = `No expression data found for "${raw}".`
     } else if (isAlreadyAdded(proteins.value, entry)) {
@@ -450,16 +436,10 @@ function stripX(val) {
   margin-bottom: 32px;
 }
 
-.source-select {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: var(--font);
-  cursor: pointer;
+.cell-lines-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
 }
 
 .search-input {
@@ -474,7 +454,7 @@ function stripX(val) {
   box-sizing: border-box;
 }
 
-.search-input:focus, .source-select:focus {
+.search-input:focus {
   outline: none;
   border-color: var(--indigo);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);

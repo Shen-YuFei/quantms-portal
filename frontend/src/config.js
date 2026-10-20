@@ -20,6 +20,7 @@ export const DATASET_SEARCH_BASE = `${API_BASE}/dataset-search`
 export const PEPTIDE_SEARCH_BASE = `${API_BASE}/peptide-search`
 export const COMPASS_BASE = `${API_BASE}/compass`
 export const DE_BASE = (env.VITE_DE_BASE || `${API_BASE}/differential-expression`).replace(/\/$/, '')
+export const CELL_LINES_BASE = (env.VITE_CELL_LINES_BASE || `${API_BASE}/cell-lines`).replace(/\/$/, '')
 
 // S3 browse host for dataset file downloads.
 export const BROWSE_BASE = (env.VITE_BROWSE_BASE || 'https://browse.quantms.org').replace(/\/$/, '')
@@ -30,9 +31,6 @@ export const EVALUATION_PATH = '/quantms/evaluations'
 // Precomputed portal-wide statistics artifact (Tier-1 static app). The Statistics
 // view reads this JSON directly from browse — no stats backend, no per-request compute.
 export const STATS_PATH = '/quantms/apps/statistics/stats.json'
-// Protein co-expression app artifacts (index.json + network/<shard>.json), built by the
-// backend's apps/coexpression/builder.py and served through BROWSE_BASE.
-export const COEXP_PATH = '/quantms/apps/coexpression'
 
 // GPP (Global Peptide Probability) — the per-observation evidence-quality score.
 // The "high-confidence only" filter sends a single `gpp_min` cutoff (0..1); its
