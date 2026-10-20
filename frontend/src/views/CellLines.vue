@@ -22,14 +22,15 @@
         <AtlasPicker id="cl-line" kind="line" label="Cell line" placeholder="Name, CVCL_ accession or DepMap ID, e.g. MCF7" @select="selectLine" />
       </section>
 
-      <ProteinTab v-if="tab === 'protein'" :gene="gene" :groups="groups.data.value || []"
+      <ProteinTab v-if="tab === 'protein'" :gene="gene" :by="String(route.query.by || '')"
+                  @update-by="(b) => setQuery({ by: b })"
                   @select-gene="selectGene" @open-coexpression="(g) => setQuery({ tab: 'coexpression', gene: g })" />
-      <LineTab v-else-if="tab === 'line'" :line="line" :live-collections="live" @select-gene="selectGene" />
+      <LineTab v-else-if="tab === 'line'" :line="line" @select-gene="selectGene" />
       <CompareTab v-else-if="tab === 'compare'" v-bind="compareSel" :groups="groups.data.value || []"
                   @update="updateCompare" @select-gene="selectGene" />
       <CoexpressionTab v-else-if="tab === 'coexpression'" :gene="gene"
                        @select-gene="(g) => setQuery({ gene: g })" @open-protein="selectGene" />
-      <DatasetsTab v-else-if="tab === 'datasets'" :catalogue="datasets.data.value" :loading="datasets.loading.value"
+      <DatasetsTab v-else-if="tab === 'datasets'" :studies="datasets.data.value" :loading="datasets.loading.value"
                    :error="datasets.error.value" :retry="datasets.run" />
 
       <footer class="cl-provenance" data-test="provenance">
@@ -50,7 +51,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  TABS, tabFromQuery, listFromQuery, errorMessage, getManifest, getGroups, getDatasets, liveCollections,
+  TABS, tabFromQuery, listFromQuery, errorMessage, getManifest, getGroups, getDatasets,
 } from '../cellLines.js'
 import { useRequest } from '../components/cellLines/useRequest.js'
 import AtlasPicker from '../components/cellLines/AtlasPicker.vue'
@@ -78,7 +79,6 @@ const compareSel = computed(() => ({
   a: String(route.query.a || ''),
   b: String(route.query.b || ''),
 }))
-const live = computed(() => liveCollections(datasets.data.value))
 const amendments = computed(() => (manifest.data.value?.amendments || []).join(', '))
 
 function setQuery(patch) {
@@ -96,7 +96,7 @@ const selectLine = (l) => setQuery({ tab: 'line', line: l })
 const updateCompare = (patch) => setQuery({ tab: 'compare', ...patch, ...(patch.mode === 'lines' ? { group: '', a: '', b: '' } : {}) })
 
 watch(tab, (t) => {
-  if ((t === 'datasets' || t === 'line') && !datasets.data.value && !datasets.loading.value) datasets.run()
+  if (t === 'datasets' && !datasets.data.value && !datasets.loading.value) datasets.run()
 }, { immediate: true })
 
 onMounted(() => {

@@ -37,16 +37,15 @@
         <div v-if="!d.studies?.length" class="cl-empty">No studies listed for this line.</div>
         <div v-else class="cl-table-wrap">
           <table class="cl-table" data-test="studies-table">
-            <thead><tr><th>Study</th><th>Acquisition</th><th class="num">Lines</th><th>Accessions</th></tr></thead>
+            <thead><tr><th>Study</th><th class="num">Lines</th><th>Accessions</th></tr></thead>
             <tbody>
               <tr v-for="st in d.studies" :key="st.study">
                 <td>{{ st.study }}</td>
-                <td>{{ asList(st.acq).join(', ') || '—' }}</td>
                 <td class="num">{{ st.n_lines ?? '—' }}</td>
                 <td>
                   <template v-for="(acc, i) in asList(st.accessions)" :key="acc">
                     <span v-if="i">, </span>
-                    <router-link v-if="accessionRoute(acc, liveCollections)" :to="accessionRoute(acc, liveCollections)">{{ acc }}</router-link>
+                    <a v-if="accessionUrl(acc)" :href="accessionUrl(acc)" target="_blank" rel="noopener">{{ acc }}</a>
                     <span v-else>{{ acc }}</span>
                   </template>
                 </td>
@@ -59,25 +58,23 @@
       <div class="cl-grid-2">
         <section v-for="t in distinctive" :key="t.key" class="cl-card">
           <div class="cl-card-head"><h3>{{ t.title }}</h3></div>
-          <div v-if="!t.rows.length" class="cl-empty">No genes pass the filters (≥3 lineage lines, ≥2 studies).</div>
+          <div v-if="!t.rows.length" class="cl-empty">No genes pass the filters.</div>
           <div v-else class="cl-table-wrap">
             <table class="cl-table">
-              <thead><tr><th>Gene</th><th class="num">Line</th><th class="num">Lineage mean</th><th class="num">Δ</th><th class="num">Lineage lines</th><th class="num">Studies</th></tr></thead>
+              <thead><tr><th>Gene</th><th class="num">Δ vs lineage</th><th class="num">Studies compared</th><th class="num">Lineage peers</th></tr></thead>
               <tbody>
                 <tr v-for="r in t.rows" :key="r.gene">
                   <td><button type="button" class="cl-linkish" @click="$emit('select-gene', r.gene)">{{ r.gene }}</button></td>
-                  <td class="num">{{ fmt(r.l4_mean) }}</td>
-                  <td class="num">{{ fmt(r.lineage_mean_l4) }}</td>
-                  <td class="num" :class="r.delta >= 0 ? 'cl-pos' : 'cl-neg'">{{ fmt(r.delta) }}</td>
+                  <td class="num" :class="r.delta >= 0 ? 'cl-pos' : 'cl-neg'">{{ signed(r.delta) }}</td>
+                  <td class="num">{{ r.n_studies_compared ?? '—' }}</td>
                   <td class="num">{{ r.lineage_lines ?? '—' }}</td>
-                  <td class="num">{{ r.n_studies ?? '—' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </section>
       </div>
-      <p class="cl-caption">Descriptive: the line's within-study rank (level 4) minus its lineage mean, for genes measured in ≥3 lines of the lineage and ≥2 studies; contaminant-prone and family rows excluded.</p>
+      <p class="cl-caption" data-test="line-distinct-caption">Compared with the rest of its lineage in the same studies (A49).</p>
 
       <section class="cl-card">
         <div class="cl-card-head"><h3>Lineage-enriched proteins detected in this line</h3></div>
@@ -103,13 +100,12 @@
 
 <script setup>
 import { computed, watch } from 'vue'
-import { getLine, fmt, accessionRoute } from '../../cellLines.js'
+import { getLine, fmt, signed, accessionUrl } from '../../cellLines.js'
 import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
 
 const props = defineProps({
   line: { type: String, default: '' },
-  liveCollections: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-gene'])
 

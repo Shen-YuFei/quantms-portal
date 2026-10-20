@@ -26,13 +26,13 @@ export const getGeneCoexpression = (gene) => get(`/genes/${encodePath(gene)}/coe
 export const searchLines = (q, limit = 12) => get('/lines', { q, limit }).then((r) => r.lines || [])
 export const getLine = (line) => get(`/lines/${encodePath(line)}`)
 export const getGroups = () => get('/groups').then((r) => r.groups || [])
-export const getDatasets = () => get('/datasets')
+export const getDatasets = () => get('/datasets').then((r) => r.studies || [])
 
 /** Query params for GET /compare, or null when the selection is incomplete. */
 export function compareParams({ mode, lines, group, a, b } = {}) {
   if (mode === 'groups') {
     if (!GROUP_KINDS.some((g) => g.id === group) || !a || !b || a === b) return null
-    return { group, a, b }
+    return { group, a, b, background: true }
   }
   const picked = [...new Set((lines || []).filter(Boolean))]
   if (picked.length < 2 || picked.length > MAX_COMPARE_LINES) return null
@@ -69,7 +69,7 @@ export function errorMessage(err, what = 'This item') {
 export const PRESENCE_STATES = [
   { id: 'high', label: 'Detected, ≥2 peptides' },
   { id: 'detected', label: 'Detected' },
-  { id: 'plex', label: 'Identified in TMT plex only' },
+  { id: 'nocall', label: 'No presence call' },
   { id: 'absent', label: 'Not detected' },
   { id: 'unmeasured', label: 'Not measured' },
 ]
@@ -79,7 +79,7 @@ export function presenceState(row) {
   if (!row || !(row.n_studies_measured > 0)) return 'unmeasured'
   if (row.n_studies_present_high > 0) return 'high'
   if (row.n_studies_present > 0) return 'detected'
-  if (row.n_studies_plex_identified > 0) return 'plex'
+  if (row.n_studies_plex_identified > 0) return 'nocall'
   return 'absent'
 }
 
@@ -89,38 +89,17 @@ export function presenceTooltip(row) {
   if (!n) return `${name}: not measured`
   return `${name}: detected in ${row.n_studies_present || 0} of ${n} studies that measured it` +
     ` (≥2 peptides in ${row.n_studies_present_high || 0})` +
-    (row.n_studies_plex_identified ? `; identified in the TMT plex in ${row.n_studies_plex_identified} (not channel-specific)` : '')
+    (row.n_studies_plex_identified ? `; no per-line presence call in ${row.n_studies_plex_identified}` : '')
 }
 
-/**
- * Per group value: lines in each presence state. Lines in the atlas (from /groups) that the
- * gene response does not return, or returns with no measuring study, count as not measured.
- */
-export function presenceByGroup(lines, groups, kind = 'lineage') {
-  const totals = new Map()
-  for (const g of groups || []) if (g.group === kind) totals.set(g.value, g.n_lines || 0)
-  const byValue = new Map()
-  for (const row of lines || []) {
-    const key = row[kind] ?? 'unmapped'
-    if (!byValue.has(key)) byValue.set(key, [])
-    byValue.get(key).push(row)
-  }
-  const keys = new Set([...totals.keys(), ...byValue.keys()])
-  const out = []
-  for (const value of keys) {
-    const rows = (byValue.get(value) || []).map((r) => ({ ...r, state: presenceState(r) }))
-    const counts = { high: 0, detected: 0, plex: 0, absent: 0, unmeasured: 0 }
-    for (const r of rows) counts[r.state]++
-    const measured = counts.high + counts.detected + counts.plex + counts.absent
-    const total = Math.max(totals.get(value) ?? 0, rows.length)
-    counts.unmeasured = total - measured
-    out.push({ value, total, counts, lines: rows.filter((r) => r.state !== 'unmeasured') })
-  }
-  return out.sort((x, y) => (y.counts.high + y.counts.detected) / (y.total || 1) -
-    (x.counts.high + x.counts.detected) / (x.total || 1) || y.total - x.total)
-}
+// Groups smaller than this are hidden by default (same minimum as specificity and compare).
+export const MIN_GROUP_LINES = 3
+// Quartiles need at least this many lines.
+export const BOX_MIN_LINES = 5
 
-// Summaries -------------------------------------------------------------------
+/** Group kind from the `by` URL param (lineage | disease). */
+export const kindFromQuery = (by) => (by === 'disease' ? 'primary_disease' : 'lineage')
+export const byParam = (kind) => (kind === 'primary_disease' ? 'disease' : 'lineage')
 
 function quantile(sorted, p) {
   if (!sorted.length) return null
@@ -137,26 +116,118 @@ export function boxStats(values) {
   return { min: v[0], q1: quantile(v, 0.25), median: quantile(v, 0.5), q3: quantile(v, 0.75), max: v[v.length - 1], n: v.length }
 }
 
-/** Level-4 strips per group value, joined with the API's group summary. */
-export function abundanceByGroup(lines, groups, kind = 'lineage') {
-  const summary = new Map()
-  for (const g of groups || []) if (g.group === kind) summary.set(g.group_value, g)
+/**
+ * Dot-plot rows from the API group summary (A49): within-study enrichment vs the other lines of the
+ * same studies, detection among lines with a presence call; per-line rows feed the expanded strip.
+ */
+export function groupDots(lines, groups, kind = 'lineage') {
   const byValue = new Map()
   for (const row of lines || []) {
-    if (!Number.isFinite(row.l4_mean)) continue
+    const state = presenceState(row)
+    if (state === 'unmeasured') continue
     const key = row[kind] ?? 'unmapped'
     if (!byValue.has(key)) byValue.set(key, [])
-    byValue.get(key).push(row)
+    byValue.get(key).push({ ...row, state })
   }
-  const out = []
-  for (const [value, rows] of byValue) {
-    const s = summary.get(value) || {}
-    out.push({
-      value, rows, box: boxStats(rows.map((r) => r.l4_mean)),
-      mean_l4: s.mean_l4 ?? null, n_lines: s.n_lines ?? rows.length, frac_present: s.frac_present ?? null,
-    })
+  const out = (groups || []).filter((g) => g.kind === kind).map((g) => {
+    const rows = byValue.get(g.value) || []
+    const l4 = rows.map((r) => r.l4_mean).filter((v) => Number.isFinite(v))
+    const enrichment = Number.isFinite(g.enrichment) ? g.enrichment : null
+    return {
+      value: g.value, rows, enrichment, n_called: g.n_called || 0, n_detected: g.n_detected || 0,
+      n_lines: g.n_lines ?? rows.length, n_studies: g.n_studies ?? null,
+      frac: g.n_called > 0 ? (g.n_detected || 0) / g.n_called : null,
+      box: l4.length >= BOX_MIN_LINES ? boxStats(l4) : null,
+      small: enrichment === null || (g.n_lines ?? rows.length) < MIN_GROUP_LINES,
+    }
+  })
+  return out.sort((a, b) => a.small - b.small || (a.enrichment === null) - (b.enrichment === null) ||
+    (b.enrichment ?? 0) - (a.enrichment ?? 0) || b.n_lines - a.n_lines)
+}
+
+// RNA reference ------------------------------------------------------------------
+
+export const RNA_STATES = [
+  { id: 'detected', label: 'Detected' },
+  { id: 'absent', label: 'Not detected' },
+]
+
+/** DepMap log2(TPM+1) per protein state; lines without a presence call or not measured are counted apart. */
+export function rnaByDetection(rows) {
+  const values = Object.fromEntries(RNA_STATES.map((s) => [s.id, []]))
+  let unmeasured = 0
+  let nocall = 0
+  for (const r of rows || []) {
+    if (!Number.isFinite(r.log2_tpm)) continue
+    if (values[r.protein_state]) values[r.protein_state].push(r.log2_tpm)
+    else if (r.protein_state === 'plex') nocall++
+    else unmeasured++
   }
-  return out.sort((a, b) => (b.mean_l4 ?? b.box.median) - (a.mean_l4 ?? a.box.median))
+  const all = Object.values(values).flat()
+  return {
+    groups: RNA_STATES.map((s) => ({ ...s, values: values[s.id], n: values[s.id].length, box: boxStats(values[s.id]) })),
+    min: all.length ? Math.min(...all) : 0,
+    max: all.length ? Math.max(...all) : 0,
+    unmeasured,
+    nocall,
+  }
+}
+
+/** One-line reading of the across-line RNA–protein agreement. */
+export function rnaVerdict(agreement, flatSd = 0.5) {
+  if (!agreement) return null
+  const rho = agreement.rna_protein_spearman
+  const icc = agreement.icc
+  if (agreement.flat_rna) return { key: 'flat', text: `RNA barely varies across lines (SD < ${flatSd}); correlation is not informative.` }
+  if (!Number.isFinite(rho)) return { key: 'none', text: 'Too few lines with both RNA and protein values for a correlation.' }
+  if (rho >= 0.5 && icc >= 0.6) return { key: 'tracks', text: 'Protein tracks mRNA across lines.' }
+  if (rho < 0.3 && Number.isFinite(icc) && icc < 0.5) {
+    return { key: 'limited', text: `Low agreement, but protein reliability is limited (ICC ${fmt(icc)}); likely limited by measurement.` }
+  }
+  return { key: 'moderate', text: 'Moderate / low agreement across lines.' }
+}
+
+const GREY = 'rgba(100, 116, 139, 0.45)'
+const INDIGO = 'rgba(79, 70, 229, 0.9)'
+
+/** RNA (x) vs level 4 (y) for detected lines only; one lineage may be highlighted. */
+export function detectedScatter(rows, xKey, { transform = (x) => x, isDetected = (r) => r.protein_state === 'detected', highlight = '' } = {}) {
+  const base = []
+  const hi = []
+  let excluded = 0
+  for (const r of rows || []) {
+    const x = r[xKey]
+    if (!Number.isFinite(x)) continue
+    if (!isDetected(r)) { if (Number.isFinite(r.l4_mean)) excluded++; continue }
+    if (!Number.isFinite(r.l4_mean)) continue
+    const p = { x: transform(x), y: r.l4_mean, label: r.name || r.line, lineage: r.lineage || 'unmapped' }
+    ;(highlight && p.lineage === highlight ? hi : base).push(p)
+  }
+  const xs = [...base, ...hi].map((p) => p.x)
+  const lo = xs.length ? Math.min(...xs) : 0
+  const top = xs.length ? Math.max(...xs) : 1
+  const pad = Math.max(0.25, (top - lo) * 0.05)
+  const datasets = [{ label: 'detected lines', data: base, backgroundColor: GREY, pointRadius: 3, pointHoverRadius: 5, order: 1 }]
+  if (highlight) datasets.unshift({ label: highlight, data: hi, backgroundColor: INDIGO, pointRadius: 4, pointHoverRadius: 6, order: 0 })
+  return { n: xs.length, highlighted: hi.length, excluded, xMin: Math.max(0, lo - pad), xMax: top + pad, data: { datasets } }
+}
+
+// Co-expression -----------------------------------------------------------------
+
+export const COEXP_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'beyond', label: 'Beyond shared complexes' },
+  { id: 'validated', label: 'Validated only' },
+]
+
+export const noPartnersText = (gene, minZ = 4) =>
+  `No partners at |Z| ≥ ${minZ} for ${gene}: its co-variation across lines is not distinguishable from chance.`
+
+export function filterPartners(partners, mode = 'all') {
+  const rows = partners || []
+  if (mode === 'validated') return rows.filter((p) => p.validated)
+  if (mode === 'beyond') return rows.filter((p) => !(p.shared_complexes || []).length)
+  return rows
 }
 
 // Formatting --------------------------------------------------------------------
@@ -178,31 +249,20 @@ export function heatColor(v) {
   return `rgba(99, 102, 241, ${(0.06 + t * 0.6).toFixed(3)})`
 }
 
-const PALETTE = [
-  '#6366f1', '#f59e0b', '#10b981', '#e5484d', '#3b82f6', '#7c3aed', '#14b8a6', '#d946ef',
-  '#84cc16', '#f97316', '#0ea5e9', '#a16207', '#64748b', '#be123c', '#065f46', '#4338ca',
-]
-export const colorFor = (i) => PALETTE[i % PALETTE.length]
+/** Diverging fill for a within-study enrichment: blue below 0, grey at 0, red above; clamped at ±0.5. */
+export function enrichmentColor(v) {
+  if (!Number.isFinite(v)) return 'transparent'
+  const t = Math.min(1, Math.max(-1, v / 0.5))
+  const [from, to] = t < 0 ? [[203, 213, 225], [37, 99, 235]] : [[203, 213, 225], [220, 38, 38]]
+  const k = Math.abs(t)
+  const mix = (i) => Math.round(from[i] + (to[i] - from[i]) * k)
+  return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`
+}
 
-/** Chart.js scatter datasets of RNA (x) vs level 4 (y), one dataset per lineage. */
-export function rnaScatter(rows, xKey, transform = (x) => x) {
-  const byLineage = new Map()
-  for (const r of rows || []) {
-    const x = r[xKey]
-    if (!Number.isFinite(x) || !Number.isFinite(r.l4_mean)) continue
-    const key = r.lineage || 'unmapped'
-    if (!byLineage.has(key)) byLineage.set(key, [])
-    byLineage.get(key).push({ x: transform(x), y: r.l4_mean, label: r.name || r.line })
-  }
-  const keys = [...byLineage.keys()].sort()
-  return {
-    n: keys.reduce((s, k) => s + byLineage.get(k).length, 0),
-    data: {
-      datasets: keys.map((k, i) => ({
-        label: k, data: byLineage.get(k), backgroundColor: colorFor(i), pointRadius: 3, pointHoverRadius: 5,
-      })),
-    },
-  }
+/** Signed two-decimal number, e.g. +0.35. */
+export function signed(v, digits = 2) {
+  if (!Number.isFinite(v)) return '—'
+  return `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(digits)}`
 }
 
 /** Sort a copy of rows by key; nulls last. */
@@ -219,42 +279,27 @@ export function sortRows(rows, key, dir = 'desc') {
   })
 }
 
-/** Portal route for a study accession: live datasets go to their page, other PXD/MSV to search. */
-export function accessionRoute(acc, liveCollections = {}) {
-  const a = String(acc || '')
-  if (liveCollections[a]) return `/collections/${liveCollections[a]}/${a}`
-  if (/^(PXD|MSV)\d+$/i.test(a)) return `/apps/dataset-search?q=${encodeURIComponent(a)}`
+/** External page for a study accession (PRIDE, MassIVE or PubMed), or '' when unknown. */
+export function accessionUrl(acc) {
+  const a = String(acc || '').trim()
+  if (/^PXD\d+$/i.test(a)) return `https://www.ebi.ac.uk/pride/archive/projects/${a.toUpperCase()}`
+  if (/^MSV\d+$/i.test(a)) return `https://massive.ucsd.edu/ProteoSAFe/dataset.jsp?accession=${a.toUpperCase()}`
+  const pmid = /^PMID:?\s*(\d+)$/i.exec(a)
+  if (pmid) return `https://pubmed.ncbi.nlm.nih.gov/${pmid[1]}`
   return ''
 }
 
-/** Rows of the Datasets tab with a resolved live/pending status. */
-export function catalogueRows(catalogue) {
-  const live = new Map((catalogue?.live_status?.live || []).map((x) => [x.accession, x.portal_collection]))
-  return (catalogue?.datasets || []).map((d) => {
-    const isLive = live.has(d.accession) || d.live === 1 || d.live === true
-    return { ...d, status: isLive ? 'live' : 'pending', portal_collection: d.portal_collection || live.get(d.accession) || '' }
-  })
-}
-
-/** Accession → portal collection for live catalogue datasets. */
-export function liveCollections(catalogue) {
-  const out = {}
-  for (const r of catalogueRows(catalogue)) if (r.status === 'live' && r.portal_collection) out[r.accession] = r.portal_collection
-  return out
-}
-
-/** Radial co-expression layout: strongest partners first from 12 o'clock and closest to the centre. */
-export function radialLayout(edges, { cx = 300, cy = 300, radius = 230, inner = 0.55 } = {}) {
+/** Co-expression partners on one circle, ordered by Z from 12 o'clock; strength is for edge width and opacity. */
+export function radialLayout(edges, { cx = 300, cy = 300, radius = 230 } = {}) {
   const n = edges.length
   const maxZ = Math.max(...edges.map((e) => Math.abs(e.z) || 0), 1)
-  return edges.map((e, i) => {
+  return [...edges].sort((a, b) => b.z - a.z).map((e, i) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(n, 1)
     const strength = Math.abs(e.z) / maxZ
-    const d = radius * (inner + (1 - inner) * (1 - strength))
     return {
       ...e, strength, angle,
-      x: cx + d * Math.cos(angle),
-      y: cy + d * Math.sin(angle),
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
       anchor: Math.cos(angle) >= 0 ? 'start' : 'end',
     }
   })

@@ -35,7 +35,7 @@
           <div class="cl-fact">
             <div class="cl-fact-label">Lines</div>
             <div class="cl-fact-value">{{ s.n_lines_present ?? '—' }} / {{ s.n_lines_measured ?? '—' }}</div>
-            <div class="cl-fact-sub">detected in ≥1 non-TMT study / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template><template v-if="s.n_lines_plex_only"> · {{ s.n_lines_plex_only }} TMT plex only</template></div>
+            <div class="cl-fact-sub">detected / measured<template v-if="s.n_lines_present_high != null"> · {{ s.n_lines_present_high }} with ≥2 peptides</template></div>
           </div>
           <div class="cl-fact">
             <div class="cl-fact-label">Studies</div>
@@ -49,20 +49,11 @@
 
       <section class="cl-card">
         <div class="cl-card-head">
-          <h3>Presence by {{ kindLabel }}</h3>
+          <h3>Detection and abundance by {{ kindLabel }}</h3>
           <GroupToggle v-model="kind" />
         </div>
-        <PresenceByGroup :lines="d.lines" :groups="groups" :kind="kind" />
-        <p class="cl-caption">Each dot is a line, “detected in k of N studies that measured it”. Not measured means no study of that line reported this gene; it is not the same as not detected. TMT identifications are plex-level (not channel-specific), so a line seen only in TMT is shown as “identified in TMT plex only”, not detected.</p>
-      </section>
-
-      <section class="cl-card">
-        <div class="cl-card-head">
-          <h3>Abundance by {{ kindLabel }}</h3>
-          <GroupToggle v-model="kind" />
-        </div>
-        <AbundanceByGroup :lines="d.lines" :groups="d.groups" :kind="kind" />
-        <p class="cl-caption">Corrected level 4: each line's mean within-study percentile rank (0 = lowest, 1 = highest). Boxes show the interquartile range and median.</p>
+        <GroupDotPlot :lines="d.lines" :groups="d.groups" :kind="kind" />
+        <p class="cl-caption">One row per {{ kindLabel }}, sorted by how much higher its lines rank than the other lines measured in the same studies (A49). Click a row for its lines. Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.</p>
       </section>
 
       <section class="cl-card">
@@ -100,7 +91,7 @@
       <section class="cl-card">
         <div class="cl-card-head"><h3>RNA and protein across lines</h3></div>
         <StatusBlock :loading="rna.loading.value" :error="rna.error.value" what="RNA reference" :retry="() => rna.run(gene)" />
-        <RnaPanel v-if="rna.data.value" :rna="rna.data.value" />
+        <RnaPanel v-if="rna.data.value" :rna="rna.data.value" :lines="d.lines" :gene="gene" />
       </section>
 
       <section class="cl-card">
@@ -109,8 +100,8 @@
           <button type="button" class="cl-linkish" @click="$emit('open-coexpression', gene)">Open network →</button>
         </div>
         <StatusBlock :loading="coexp.loading.value" :error="coexp.error.value" what="Co-expression" :retry="() => coexp.run(gene)" />
-        <NeighboursTable v-if="coexp.data.value" :gene="gene" :edges="coexp.data.value.edges || []"
-                         :threshold="coexp.data.value.threshold || ''" @select-gene="(g) => $emit('select-gene', g)" />
+        <NeighboursTable v-if="coexp.data.value" :gene="gene" :partners="coexp.data.value.partners || []"
+                         :threshold="coexp.data.value.threshold || ''" :min-z="coexp.data.value.display_min_z ?? 4" @select-gene="(g) => $emit('select-gene', g)" />
       </section>
     </template>
   </div>
@@ -118,20 +109,19 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { getGene, getGeneRna, getGeneCoexpression, fmt, GROUP_KINDS } from '../../cellLines.js'
+import { getGene, getGeneRna, getGeneCoexpression, fmt, GROUP_KINDS, kindFromQuery, byParam } from '../../cellLines.js'
 import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
 import GroupToggle from './GroupToggle.vue'
-import PresenceByGroup from './PresenceByGroup.vue'
-import AbundanceByGroup from './AbundanceByGroup.vue'
+import GroupDotPlot from './GroupDotPlot.vue'
 import RnaPanel from './RnaPanel.vue'
 import NeighboursTable from './NeighboursTable.vue'
 
 const props = defineProps({
   gene: { type: String, default: '' },
-  groups: { type: Array, default: () => [] },
+  by: { type: String, default: 'lineage' },
 })
-defineEmits(['select-gene', 'open-coexpression'])
+const emit = defineEmits(['select-gene', 'open-coexpression', 'update-by'])
 
 const examples = ['VIM', 'EPCAM', 'PSMA1']
 const PAGE = 50
@@ -140,10 +130,13 @@ const LINK_LABELS = { hpa_cell_line: 'HPA cell line', hpa_tissue: 'HPA tissue', 
 const detail = useRequest(getGene)
 const rna = useRequest(getGeneRna)
 const coexp = useRequest(getGeneCoexpression)
-const kind = ref('lineage')
 const valueFilter = ref('')
 const page = ref(0)
 
+const kind = computed({
+  get: () => kindFromQuery(props.by),
+  set: (k) => emit('update-by', byParam(k)),
+})
 const d = computed(() => detail.data.value)
 const s = computed(() => d.value?.gene || {})
 const kindLabel = computed(() => GROUP_KINDS.find((k) => k.id === kind.value).label.toLowerCase())

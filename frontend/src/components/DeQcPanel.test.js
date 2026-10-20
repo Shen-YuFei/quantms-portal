@@ -5,7 +5,7 @@ import { mount } from '@vue/test-utils'
 vi.mock('chart.js', () => {
   class Chart { constructor() {} update() {} destroy() {} }
   Chart.register = () => {}
-  return { Chart, ScatterController: {}, PointElement: {}, LinearScale: {}, Tooltip: {}, Legend: {} }
+  return { Chart, ScatterController: {}, PointElement: {}, LineElement: {}, LinearScale: {}, Tooltip: {}, Legend: {} }
 })
 
 import DeQcPanel, { pcaToScatter, qcChips, fmtScore, powerReplicateSummary } from './DeQcPanel.vue'
