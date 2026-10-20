@@ -114,13 +114,18 @@ export function presenceByGroup(lines, groups, kind = 'lineage') {
     const measured = counts.high + counts.detected + counts.plex + counts.absent
     const total = Math.max(totals.get(value) ?? 0, rows.length)
     counts.unmeasured = total - measured
-    out.push({ value, total, counts, lines: rows.filter((r) => r.state !== 'unmeasured') })
+    out.push({ value, total, counts, lines: rows.filter((r) => r.state !== 'unmeasured'), small: total < MIN_GROUP_LINES })
   }
-  return out.sort((x, y) => (y.counts.high + y.counts.detected) / (y.total || 1) -
+  return out.sort((x, y) => x.small - y.small || (y.counts.high + y.counts.detected) / (y.total || 1) -
     (x.counts.high + x.counts.detected) / (x.total || 1) || y.total - x.total)
 }
 
 // Summaries -------------------------------------------------------------------
+
+// Groups smaller than this are hidden by default (same minimum as specificity and compare).
+export const MIN_GROUP_LINES = 3
+// Quartiles need at least this many lines.
+export const BOX_MIN_LINES = 5
 
 function quantile(sorted, p) {
   if (!sorted.length) return null
@@ -151,12 +156,14 @@ export function abundanceByGroup(lines, groups, kind = 'lineage') {
   const out = []
   for (const [value, rows] of byValue) {
     const s = summary.get(value) || {}
+    const box = rows.length >= BOX_MIN_LINES ? boxStats(rows.map((r) => r.l4_mean)) : null
+    const mean = s.mean_l4 ?? rows.reduce((a, r) => a + r.l4_mean, 0) / rows.length
     out.push({
-      value, rows, box: boxStats(rows.map((r) => r.l4_mean)),
-      mean_l4: s.mean_l4 ?? null, n_lines: s.n_lines ?? rows.length, frac_present: s.frac_present ?? null,
+      value, rows, box, mean_l4: mean, n_lines: s.n_lines ?? rows.length, frac_present: s.frac_present ?? null,
+      small: rows.length < MIN_GROUP_LINES,
     })
   }
-  return out.sort((a, b) => (b.mean_l4 ?? b.box.median) - (a.mean_l4 ?? a.box.median))
+  return out.sort((a, b) => a.small - b.small || b.mean_l4 - a.mean_l4)
 }
 
 // Formatting --------------------------------------------------------------------
@@ -178,9 +185,11 @@ export function heatColor(v) {
   return `rgba(99, 102, 241, ${(0.06 + t * 0.6).toFixed(3)})`
 }
 
+// 30 distinguishable colours (one per Oncotree lineage in the atlas).
 const PALETTE = [
-  '#6366f1', '#f59e0b', '#10b981', '#e5484d', '#3b82f6', '#7c3aed', '#14b8a6', '#d946ef',
-  '#84cc16', '#f97316', '#0ea5e9', '#a16207', '#64748b', '#be123c', '#065f46', '#4338ca',
+  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+  '#393b79', '#e6550d', '#31a354', '#843c39', '#7b4173', '#3182bd', '#fd8d3c', '#74c476', '#ad494a', '#a55194',
+  '#6baed6', '#fdae6b', '#a1d99b', '#e7969c', '#ce6dbd', '#636363', '#bd9e39', '#9c9ede', '#e7ba52', '#17a589',
 ]
 export const colorFor = (i) => PALETTE[i % PALETTE.length]
 

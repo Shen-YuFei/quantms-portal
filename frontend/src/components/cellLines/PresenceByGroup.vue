@@ -6,7 +6,7 @@
       </span>
     </div>
     <div v-if="!rows.length" class="cl-empty">No lines in this grouping.</div>
-    <div v-for="r in rows" :key="r.value" class="cl-presence-row" data-test="presence-row">
+    <div v-for="r in shown" :key="r.value" class="cl-presence-row" data-test="presence-row">
       <div class="cl-presence-label" :title="r.value">{{ r.value }}</div>
       <div class="cl-presence-bar" role="img"
            :aria-label="`${r.value}: ${r.counts.high} detected with ≥2 peptides, ${r.counts.detected} detected, ${r.counts.plex} identified in TMT plex only, ${r.counts.absent} not detected, ${r.counts.unmeasured} not measured`">
@@ -19,17 +19,24 @@
         <span v-for="l in r.lines" :key="l.line" class="cl-dot" :class="`cl-p-${l.state}`" :title="presenceTooltip(l)"></span>
       </div>
     </div>
+    <button v-if="hidden" type="button" class="cl-linkbtn" data-test="presence-toggle" @click="showAll = !showAll">
+      {{ showAll ? 'Hide' : 'Show' }} {{ hidden }} group{{ hidden === 1 ? '' : 's' }} with fewer than {{ MIN_GROUP_LINES }} lines
+    </button>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { PRESENCE_STATES, presenceByGroup, presenceTooltip } from '../../cellLines.js'
+import { computed, ref, watch } from 'vue'
+import { MIN_GROUP_LINES, PRESENCE_STATES, presenceByGroup, presenceTooltip } from '../../cellLines.js'
 
 const props = defineProps({
   lines: { type: Array, default: () => [] },
   groups: { type: Array, default: () => [] },
   kind: { type: String, default: 'lineage' },
 })
+const showAll = ref(false)
+watch(() => props.kind, () => { showAll.value = false })
 const rows = computed(() => presenceByGroup(props.lines, props.groups, props.kind))
+const shown = computed(() => (showAll.value ? rows.value : rows.value.filter((r) => !r.small)))
+const hidden = computed(() => rows.value.filter((r) => r.small).length)
 </script>
