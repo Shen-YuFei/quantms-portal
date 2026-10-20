@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatBig, formatNum, formatBytes, cleanInstrument } from './format.js'
+import { formatBig, formatNum, formatBytes, cleanInstrument, datasetClassLabel } from './format.js'
 
 describe('formatBig', () => {
   it('abbreviates with K/M/B and trims trailing .0', () => {
@@ -42,5 +42,19 @@ describe('cleanInstrument', () => {
     expect(cleanInstrument('Q Exactive Plus')).toBe('Q Exactive Plus')
     expect(cleanInstrument('')).toBe('')
     expect(cleanInstrument(null)).toBe('')
+  })
+})
+
+describe('datasetClassLabel', () => {
+  it('maps the evidence-class vocabulary to human labels', () => {
+    expect(datasetClassLabel('canonical_proteomics')).toBe('Canonical proteomics')
+    expect(datasetClassLabel('immunopeptidomics')).toBe('Immunopeptidomics')
+    expect(datasetClassLabel('synthetic_peptidomics')).toBe('Synthetic peptides')
+    expect(datasetClassLabel('metaproteomics')).toBe('Metaproteomics')
+  })
+  it('degrades gracefully for missing / unrecognised values', () => {
+    expect(datasetClassLabel(null)).toBe('Unknown')
+    expect(datasetClassLabel('')).toBe('Unknown')
+    expect(datasetClassLabel('something-new')).toBe('something-new')
   })
 })

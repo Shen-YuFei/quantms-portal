@@ -123,3 +123,21 @@ export function collectionTag(name) {
       return 'tag-blue'
   }
 }
+
+// --- biological dataset classes ----------------------------------------------
+// The backend's evidence-class vocabulary (apps.metadata.dataset_classes):
+// immunopeptidomics + synthetic identifications do NOT count as
+// protein-existence evidence, so the labels make that distinction readable.
+export const DATASET_CLASS_LABELS = {
+  canonical_proteomics: 'Canonical proteomics',
+  immunopeptidomics: 'Immunopeptidomics',
+  synthetic_peptidomics: 'Synthetic peptides',
+  metaproteomics: 'Metaproteomics',
+  unknown: 'Unknown',
+}
+
+// Human label for a dataset_class value; unrecognised values pass through.
+export function datasetClassLabel(v) {
+  if (v == null || v === '') return 'Unknown'
+  return DATASET_CLASS_LABELS[v] || String(v)
+}

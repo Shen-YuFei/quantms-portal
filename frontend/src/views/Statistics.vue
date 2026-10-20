@@ -98,6 +98,16 @@
           </section>
         </div>
 
+        <!-- Biological dataset classes -->
+        <section class="chart-card">
+          <h3>Datasets by biological class</h3>
+          <p class="chart-sub">Canonical proteomics vs immunopeptidomics, synthetic peptide libraries and metaproteomics (from the dataset enrichment).</p>
+          <div v-if="classChart.labels.length">
+            <StatsChart type="doughnut" :data="classChart" :height="320" />
+          </div>
+          <p v-else class="chart-empty">No class data (dataset enrichment not yet published).</p>
+        </section>
+
         <!-- Per-collection breakdown -->
         <section class="chart-card wide">
           <h3>Per-collection breakdown</h3>
@@ -141,7 +151,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { apiGet } from '../api.js'
 import { BROWSE_BASE, STATS_PATH } from '../config.js'
-import { formatBig, formatNum, cleanInstrument, collectionTag } from '../utils/format.js'
+import { formatBig, formatNum, cleanInstrument, collectionTag, datasetClassLabel } from '../utils/format.js'
 import StatsChart from '../components/StatsChart.vue'
 
 const TOP = 25
@@ -280,6 +290,17 @@ const instrumentChart = computed(() => {
   return {
     labels,
     datasets: [{ data, backgroundColor: labels.map((_, i) => color(i)), borderWidth: 0 }],
+  }
+})
+
+// --- biological dataset classes (doughnut, one slice per class) --------------
+const classChart = computed(() => {
+  const rows = stats.value?.datasets_by_class || {}
+  const entries = Object.entries(rows)
+  const labels = entries.map(([k]) => datasetClassLabel(k))
+  return {
+    labels,
+    datasets: [{ data: entries.map(([, v]) => v), backgroundColor: labels.map((_, i) => color(i)), borderWidth: 0 }],
   }
 })
 
