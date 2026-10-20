@@ -58,7 +58,7 @@ describe('CellLines view', () => {
 
   it('reads tab and gene from the URL and writes tab changes back', async () => {
     respond()
-    const { w, router } = await mountAt('/cell-lines?tab=protein&gene=VIM')
+    const { w, router } = await mountAt('/apps/cell-lines?tab=protein&gene=VIM')
     expect(apiGet.mock.calls.some((c) => c[1] === '/genes/VIM')).toBe(true)
     expect(w.find('[data-tab="protein"]').attributes('aria-selected')).toBe('true')
     const header = w.find('[data-test="gene-header"]').text()
@@ -77,7 +77,7 @@ describe('CellLines view', () => {
 
   it('switches to a partner gene from the neighbours table', async () => {
     respond()
-    const { w, router } = await mountAt('/cell-lines?gene=VIM')
+    const { w, router } = await mountAt('/apps/cell-lines?gene=VIM')
     const partner = w.findAll('button').find((b) => b.text() === 'DES')
     await partner.trigger('click')
     await flushPromises()
@@ -86,7 +86,7 @@ describe('CellLines view', () => {
 
   it('shows presence per lineage including not-measured lines', async () => {
     respond()
-    const { w } = await mountAt('/cell-lines?gene=VIM')
+    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
     const rows = w.findAll('[data-test="presence-row"]')
     const lung = rows.find((r) => r.text().startsWith('Lung'))
     expect(lung.text()).toContain('1 / 3')
@@ -96,26 +96,26 @@ describe('CellLines view', () => {
 
   it('shows the atlas-loading message on 503', async () => {
     respond({ '/genes/VIM': new ApiError('x', 503), '/manifest': new ApiError('x', 503) })
-    const { w } = await mountAt('/cell-lines?gene=VIM')
+    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
     expect(w.text()).toContain('The atlas is loading, try again shortly.')
   })
 
   it('shows a not-in-atlas message on 404', async () => {
     respond()
-    const { w } = await mountAt('/cell-lines?gene=NOPE')
+    const { w } = await mountAt('/apps/cell-lines?gene=NOPE')
     expect(w.text()).toContain('Gene NOPE is not in the atlas.')
   })
 
   it('requests a line comparison from the URL selection', async () => {
     respond()
-    await mountAt('/cell-lines?tab=compare&lines=CVCL_0001,CVCL_0002')
+    await mountAt('/apps/cell-lines?tab=compare&lines=CVCL_0001,CVCL_0002')
     const call = apiGet.mock.calls.find((c) => c[1] === '/compare')
     expect(call[2]).toEqual({ lines: 'CVCL_0001,CVCL_0002' })
   })
 
   it('requests a group comparison and labels it descriptive', async () => {
     respond()
-    const { w } = await mountAt('/cell-lines?tab=compare&mode=groups&group=lineage&a=Lung&b=Breast')
+    const { w } = await mountAt('/apps/cell-lines?tab=compare&mode=groups&group=lineage&a=Lung&b=Breast')
     const call = apiGet.mock.calls.find((c) => c[1] === '/compare')
     expect(call[2]).toEqual({ group: 'lineage', a: 'Lung', b: 'Breast' })
     expect(w.text()).toContain('Descriptive difference in mean within-study rank; not a statistical test.')
@@ -123,7 +123,7 @@ describe('CellLines view', () => {
 
   it('writes the compare group selection to the URL', async () => {
     respond()
-    const { w, router } = await mountAt('/cell-lines?tab=compare&mode=groups')
+    const { w, router } = await mountAt('/apps/cell-lines?tab=compare&mode=groups')
     await w.find('select[aria-label="Group A"]').setValue('Lung')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'compare', mode: 'groups', a: 'Lung' })
@@ -131,14 +131,14 @@ describe('CellLines view', () => {
 
   it('renders the co-expression tab with the threshold label', async () => {
     respond()
-    const { w } = await mountAt('/cell-lines?tab=coexpression&gene=VIM')
+    const { w } = await mountAt('/apps/cell-lines?tab=coexpression&gene=VIM')
     expect(w.find('svg.cl-network').exists()).toBe(true)
     expect(w.text()).toContain('|Z| >= 5 (A44)')
   })
 
   it('handles a gene with no edges', async () => {
     respond({ '/genes/VIM/coexpression': { gene: 'VIM', threshold: '|Z| >= 5 (A44)', edges: [] } })
-    const { w } = await mountAt('/cell-lines?tab=coexpression&gene=VIM')
+    const { w } = await mountAt('/apps/cell-lines?tab=coexpression&gene=VIM')
     expect(w.text()).toContain('No edges at the validated threshold')
   })
 
@@ -150,7 +150,7 @@ describe('CellLines view', () => {
         live_status: { n_live: 1, n_pending: 1, live: [{ accession: 'PXD030304', portal_collection: 'absolute-expression' }] },
       },
     })
-    const { w } = await mountAt('/cell-lines?tab=datasets')
+    const { w } = await mountAt('/apps/cell-lines?tab=datasets')
     const rows = w.findAll('[data-test="datasets-table"] tbody tr')
     expect(rows.map((r) => r.find('td').text())).toEqual(['PXD030304', 'PXD058664'])
     expect(rows[0].text()).toContain('live')
@@ -164,11 +164,20 @@ describe('/apps/coexpression redirect', () => {
   it('redirects to the co-expression tab and keeps the gene', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes })
     await router.push('/apps/coexpression?gene=PSMA1')
-    expect(router.currentRoute.value.path).toBe('/cell-lines')
+    expect(router.currentRoute.value.path).toBe('/apps/cell-lines')
     expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression', gene: 'PSMA1' })
     await router.push('/apps/coexpression?protein=P25786')
     expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression' })
     await router.push('/apps/coexpression')
     expect(router.currentRoute.value.query).toEqual({ tab: 'coexpression' })
+  })
+})
+
+describe('/cell-lines redirect', () => {
+  it('moves old links under /apps and keeps the query', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes })
+    await router.push('/cell-lines?tab=line&line=CVCL_0031')
+    expect(router.currentRoute.value.path).toBe('/apps/cell-lines')
+    expect(router.currentRoute.value.query).toEqual({ tab: 'line', line: 'CVCL_0031' })
   })
 })

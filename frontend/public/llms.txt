@@ -16,9 +16,9 @@
 
 ## Cancer Cell Line Proteome
 
-- App: https://portal.quantms.org/cell-lines
+- App: https://portal.quantms.org/apps/cell-lines
 - Per protein: presence and within-study rank (level 4) across cancer cell lines, lineages and cancer types; RNA (DepMap, HPA) as an external reference; validated co-expression network
-- Shareable URLs: https://portal.quantms.org/cell-lines?tab=protein&gene=VIM
+- Shareable URLs: https://portal.quantms.org/apps/cell-lines?tab=protein&gene=VIM
 
 ## Baseline Expression
 

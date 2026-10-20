@@ -44,7 +44,7 @@ https://ftp.pride.ebi.ac.uk/pub/databases/pride/resources/proteomes/
 
 ## Baseline Expression Browser
 
-Compare protein expression across human tissues (cancer cell lines: https://portal.quantms.org/cell-lines):
+Compare protein expression across human tissues (cancer cell lines: https://portal.quantms.org/apps/cell-lines):
 - URL: https://portal.quantms.org/baseline
 - 15,782 proteins across 30+ human tissues
 - Shareable URLs: https://portal.quantms.org/baseline?proteins=P50851,Q96HS1

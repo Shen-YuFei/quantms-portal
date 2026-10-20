@@ -69,7 +69,7 @@ const apps = [
   {
     id: 'cell-lines',
     title: 'Cancer Cell Line Proteome',
-    to: '/cell-lines',
+    to: '/apps/cell-lines',
     tier: 2,
     description: 'Per protein: presence and abundance across cancer cell lines, lineages and cancer types, RNA side by side, and its validated co-expression network. Per line: identity, studies and distinctive proteins.',
   },
