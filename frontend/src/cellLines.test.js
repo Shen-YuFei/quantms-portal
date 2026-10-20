@@ -73,7 +73,7 @@ describe('presence classification', () => {
     expect(rows.Lung.counts).toEqual({ high: 1, detected: 1, plex: 0, absent: 1, unmeasured: 3 })
     expect(rows.Lung.total).toBe(6)
     expect(rows.Lung.lines.map((l) => l.line)).toEqual(['L1', 'L2', 'L3'])
-    expect(rows.Breast.counts).toEqual({ high: 0, detected: 0, absent: 1, unmeasured: 1 })
+    expect(rows.Breast.counts).toEqual({ high: 0, detected: 0, plex: 0, absent: 1, unmeasured: 1 })
     expect(rows.Skin.counts.unmeasured).toBe(3)
     expect(Object.keys(rows)).not.toContain('NSCLC')
   })
