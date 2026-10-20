@@ -11,7 +11,7 @@ import { apiGet, ApiError } from '../api.js'
 import CellLines from './CellLines.vue'
 import { routes } from '../router.js'
 
-const manifest = { version: 'v35', built: '2026-10-20T10:00:00+00:00', amendments: ['A41', 'A44'], level4: 'level4_rank_corrected (A41)' }
+const manifest = { atlas: 'v3.5', built: '2026-10-20T10:00:00+00:00', amendments: ['A41', 'A44'], level4: 'level4_rank_corrected (A41)' }
 const groups = { groups: [{ group: 'lineage', value: 'Lung', n_lines: 3 }, { group: 'lineage', value: 'Breast', n_lines: 2 }] }
 const vim = {
   gene: { gene: 'VIM', reliability_class: 'reliable', icc: 0.81, spec_cat3: 'lineage enriched', spec_top3: 'Lung', n_lines_present: 2, n_lines_measured: 3, n_studies: 4, is_family: false, contamination_prone: true },
@@ -67,7 +67,7 @@ describe('CellLines view', () => {
     expect(header).toContain('contamination-prone')
     expect(w.text()).toContain('not comparable across studies')
     expect(w.text()).toContain('|Z| >= 5 (A44)')
-    expect(w.find('[data-test="provenance"]').text()).toContain('v35')
+    expect(w.find('[data-test="provenance"]').text()).toContain('Updated 2026-10-20')
 
     await w.find('[data-tab="line"]').trigger('click')
     await flushPromises()

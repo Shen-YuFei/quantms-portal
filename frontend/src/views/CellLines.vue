@@ -34,8 +34,8 @@
 
       <footer class="cl-provenance" data-test="provenance">
         <template v-if="manifest.data.value">
-          Atlas {{ manifest.data.value.version || '—' }}
-          <template v-if="manifest.data.value.built"> · built {{ String(manifest.data.value.built).slice(0, 10) }}</template>
+          Updated {{ manifest.data.value.built ? String(manifest.data.value.built).slice(0, 10) : '—' }}
+          <template v-if="manifest.data.value.atlas"> · atlas {{ manifest.data.value.atlas }}</template>
           <template v-if="manifest.data.value.level4"> · level 4: {{ manifest.data.value.level4 }}</template>
           <template v-if="amendments"> · amendments {{ amendments }}</template>
         </template>
