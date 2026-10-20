@@ -73,10 +73,17 @@
       <template v-if="groupResult">
         <p class="cl-caption cl-warn">Descriptive difference in mean within-study rank; not a statistical test.</p>
         <div v-if="!groupResult.genes?.length" class="cl-empty">No genes are measured in both groups.</div>
-        <div v-else class="cl-grid-2">
+        <template v-else>
           <section class="cl-card">
-            <div class="cl-card-head"><h3>{{ groupResult.a }} vs {{ groupResult.b }}</h3></div>
-            <ScatterChart :data="groupScatter" :options="groupOptions" :height="360" @point-click="(p) => $emit('select-gene', p.label)" />
+            <div class="cl-card-head">
+              <h3>{{ groupResult.a }} vs {{ groupResult.b }}</h3>
+              <span class="cl-legend">
+                <span class="cl-legend-item"><span class="cl-swatch cl-bg-grey"></span>all genes ({{ groupResult.background?.length ?? 0 }})</span>
+                <span class="cl-legend-item"><span class="cl-swatch cl-pos-bg"></span>largest differences ({{ groupResult.genes.length }})</span>
+                <span class="cl-legend-item"><span class="cl-line-swatch cl-diag-bg"></span> x = y</span>
+              </span>
+            </div>
+            <ScatterChart :data="groupScatter" :options="groupOptions" :height="420" @point-click="(p) => p.label && $emit('select-gene', p.label)" />
           </section>
           <section class="cl-card">
             <div class="cl-table-wrap cl-table-tall">
@@ -94,8 +101,8 @@
                     <td class="num" :class="g.delta >= 0 ? 'cl-pos' : 'cl-neg'">{{ fmt(g.delta) }}</td>
                     <td class="num">{{ fmt(g.mean_l4_a) }}</td>
                     <td class="num">{{ fmt(g.mean_l4_b) }}</td>
-                    <td class="num">{{ g.n_lines_a ?? '—' }} / {{ g.n_lines_b ?? '—' }}</td>
-                    <td class="num">{{ pct(g.frac_present_a) }} / {{ pct(g.frac_present_b) }}</td>
+                    <td class="num cl-nowrap">{{ g.n_lines_a ?? '—' }} / {{ g.n_lines_b ?? '—' }}</td>
+                    <td class="num cl-nowrap">{{ pct(g.frac_present_a) }} / {{ pct(g.frac_present_b) }}</td>
                     <td class="num">{{ g.n_studies ?? '—' }}</td>
                     <td>{{ g.reliability_class || '—' }}</td>
                   </tr>
@@ -103,7 +110,7 @@
               </table>
             </div>
           </section>
-        </div>
+        </template>
       </template>
     </template>
   </div>
@@ -151,16 +158,27 @@ const groupResult = computed(() => (props.mode === 'groups' && req.data.value?.g
 
 const options = computed(() => props.groups.filter((g) => g.group === props.group))
 const groupScatter = computed(() => ({
-  datasets: [{
-    label: 'genes',
-    data: (groupResult.value?.genes || []).map((g) => ({ x: g.mean_l4_a, y: g.mean_l4_b, label: g.gene })),
-    backgroundColor: 'rgba(99, 102, 241, 0.6)', pointRadius: 3,
-  }],
+  datasets: [
+    {
+      label: 'largest differences', order: 0,
+      data: (groupResult.value?.genes || []).map((g) => ({ x: g.mean_l4_a, y: g.mean_l4_b, label: g.gene })),
+      backgroundColor: 'rgba(79, 70, 229, 0.8)', pointRadius: 3, pointHoverRadius: 5,
+    },
+    {
+      label: 'x = y', order: 1, data: [{ x: 0, y: 0 }, { x: 1, y: 1 }], showLine: true,
+      borderColor: 'rgba(100, 116, 139, 0.7)', borderWidth: 1, borderDash: [4, 4], pointRadius: 0, pointHitRadius: 0,
+    },
+    {
+      label: 'all genes', order: 2,
+      data: (groupResult.value?.background || []).map(([gene, x, y]) => ({ x, y, label: gene })),
+      backgroundColor: 'rgba(148, 163, 184, 0.35)', pointRadius: 1.5, pointHoverRadius: 3,
+    },
+  ],
 }))
 const groupOptions = computed(() => ({
   plugins: {
     legend: { display: false },
-    tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label}: ${fmt(ctx.raw.x)} vs ${fmt(ctx.raw.y)}` } },
+    tooltip: { filter: (ctx) => !!ctx.raw.label, callbacks: { label: (ctx) => `${ctx.raw.label}: ${fmt(ctx.raw.x)} vs ${fmt(ctx.raw.y)}` } },
   },
   scales: {
     x: { min: 0, max: 1, title: { display: true, text: `${props.a}: mean ${L4_AXIS.toLowerCase()}` } },

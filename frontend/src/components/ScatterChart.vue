@@ -6,7 +6,7 @@
 
 <script setup>
 // Thin Chart.js v4 scatter wrapper — used by the volcano plot + PCA views.
-// Only the scatter/point pieces are registered, keeping the tree-shaken bundle
+// Only the scatter/point/line pieces are registered, keeping the tree-shaken bundle
 // small. Colors come from the portal CSS variables so light/dark stays
 // consistent; the chart is responsive, destroys cleanly on unmount / data
 // change, and emits the clicked datum so callers can drive a selection.
@@ -15,13 +15,14 @@ import {
   Chart,
   ScatterController,
   PointElement,
+  LineElement,
   LinearScale,
   Tooltip,
   Legend,
 } from 'chart.js'
 
 Chart.register(
-  ScatterController, PointElement,
+  ScatterController, PointElement, LineElement,
   LinearScale,
   Tooltip, Legend,
 )

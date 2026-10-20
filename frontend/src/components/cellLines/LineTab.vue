@@ -46,7 +46,7 @@
                 <td>
                   <template v-for="(acc, i) in asList(st.accessions)" :key="acc">
                     <span v-if="i">, </span>
-                    <router-link v-if="accessionRoute(acc, liveCollections)" :to="accessionRoute(acc, liveCollections)">{{ acc }}</router-link>
+                    <a v-if="accessionUrl(acc)" :href="accessionUrl(acc)" target="_blank" rel="noopener">{{ acc }}</a>
                     <span v-else>{{ acc }}</span>
                   </template>
                 </td>
@@ -103,13 +103,12 @@
 
 <script setup>
 import { computed, watch } from 'vue'
-import { getLine, fmt, accessionRoute } from '../../cellLines.js'
+import { getLine, fmt, accessionUrl } from '../../cellLines.js'
 import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
 
 const props = defineProps({
   line: { type: String, default: '' },
-  liveCollections: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-gene'])
 

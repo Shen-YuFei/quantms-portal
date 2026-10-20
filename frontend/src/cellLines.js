@@ -26,13 +26,13 @@ export const getGeneCoexpression = (gene) => get(`/genes/${encodePath(gene)}/coe
 export const searchLines = (q, limit = 12) => get('/lines', { q, limit }).then((r) => r.lines || [])
 export const getLine = (line) => get(`/lines/${encodePath(line)}`)
 export const getGroups = () => get('/groups').then((r) => r.groups || [])
-export const getDatasets = () => get('/datasets')
+export const getDatasets = () => get('/datasets').then((r) => r.studies || [])
 
 /** Query params for GET /compare, or null when the selection is incomplete. */
 export function compareParams({ mode, lines, group, a, b } = {}) {
   if (mode === 'groups') {
     if (!GROUP_KINDS.some((g) => g.id === group) || !a || !b || a === b) return null
-    return { group, a, b }
+    return { group, a, b, background: true }
   }
   const picked = [...new Set((lines || []).filter(Boolean))]
   if (picked.length < 2 || picked.length > MAX_COMPARE_LINES) return null
@@ -92,40 +92,14 @@ export function presenceTooltip(row) {
     (row.n_studies_plex_identified ? `; identified in the TMT plex in ${row.n_studies_plex_identified} (not channel-specific)` : '')
 }
 
-/**
- * Per group value: lines in each presence state. Lines in the atlas (from /groups) that the
- * gene response does not return, or returns with no measuring study, count as not measured.
- */
-export function presenceByGroup(lines, groups, kind = 'lineage') {
-  const totals = new Map()
-  for (const g of groups || []) if (g.group === kind) totals.set(g.value, g.n_lines || 0)
-  const byValue = new Map()
-  for (const row of lines || []) {
-    const key = row[kind] ?? 'unmapped'
-    if (!byValue.has(key)) byValue.set(key, [])
-    byValue.get(key).push(row)
-  }
-  const keys = new Set([...totals.keys(), ...byValue.keys()])
-  const out = []
-  for (const value of keys) {
-    const rows = (byValue.get(value) || []).map((r) => ({ ...r, state: presenceState(r) }))
-    const counts = { high: 0, detected: 0, plex: 0, absent: 0, unmeasured: 0 }
-    for (const r of rows) counts[r.state]++
-    const measured = counts.high + counts.detected + counts.plex + counts.absent
-    const total = Math.max(totals.get(value) ?? 0, rows.length)
-    counts.unmeasured = total - measured
-    out.push({ value, total, counts, lines: rows.filter((r) => r.state !== 'unmeasured'), small: total < MIN_GROUP_LINES })
-  }
-  return out.sort((x, y) => x.small - y.small || (y.counts.high + y.counts.detected) / (y.total || 1) -
-    (x.counts.high + x.counts.detected) / (x.total || 1) || y.total - x.total)
-}
-
-// Summaries -------------------------------------------------------------------
-
 // Groups smaller than this are hidden by default (same minimum as specificity and compare).
 export const MIN_GROUP_LINES = 3
 // Quartiles need at least this many lines.
 export const BOX_MIN_LINES = 5
+
+/** Group kind from the `by` URL param (lineage | disease). */
+export const kindFromQuery = (by) => (by === 'disease' ? 'primary_disease' : 'lineage')
+export const byParam = (kind) => (kind === 'primary_disease' ? 'disease' : 'lineage')
 
 function quantile(sorted, p) {
   if (!sorted.length) return null
@@ -142,28 +116,115 @@ export function boxStats(values) {
   return { min: v[0], q1: quantile(v, 0.25), median: quantile(v, 0.5), q3: quantile(v, 0.75), max: v[v.length - 1], n: v.length }
 }
 
-/** Level-4 strips per group value, joined with the API's group summary. */
-export function abundanceByGroup(lines, groups, kind = 'lineage') {
-  const summary = new Map()
-  for (const g of groups || []) if (g.group === kind) summary.set(g.group_value, g)
+/**
+ * Dot-plot rows per group value: detected k of N lines that measured the gene, TMT plex-only m
+ * (not detected), mean level 4 over measured lines; sorted by mean level 4, small groups last.
+ */
+export function groupDots(lines, kind = 'lineage') {
   const byValue = new Map()
   for (const row of lines || []) {
-    if (!Number.isFinite(row.l4_mean)) continue
+    const state = presenceState(row)
+    if (state === 'unmeasured') continue
     const key = row[kind] ?? 'unmapped'
     if (!byValue.has(key)) byValue.set(key, [])
-    byValue.get(key).push(row)
+    byValue.get(key).push({ ...row, state })
   }
   const out = []
   for (const [value, rows] of byValue) {
-    const s = summary.get(value) || {}
-    const box = rows.length >= BOX_MIN_LINES ? boxStats(rows.map((r) => r.l4_mean)) : null
-    const mean = s.mean_l4 ?? rows.reduce((a, r) => a + r.l4_mean, 0) / rows.length
+    const detected = rows.filter((r) => r.state === 'high' || r.state === 'detected').length
+    const plex = rows.filter((r) => r.state === 'plex').length
+    const l4 = rows.map((r) => r.l4_mean).filter((v) => Number.isFinite(v))
     out.push({
-      value, rows, box, mean_l4: mean, n_lines: s.n_lines ?? rows.length, frac_present: s.frac_present ?? null,
+      value, rows, detected, plex, measured: rows.length,
+      frac: detected / rows.length,
+      mean_l4: l4.length ? l4.reduce((a, v) => a + v, 0) / l4.length : null,
+      box: l4.length >= BOX_MIN_LINES ? boxStats(l4) : null,
       small: rows.length < MIN_GROUP_LINES,
     })
   }
-  return out.sort((a, b) => a.small - b.small || b.mean_l4 - a.mean_l4)
+  return out.sort((a, b) => a.small - b.small || (b.mean_l4 ?? -1) - (a.mean_l4 ?? -1) || b.measured - a.measured)
+}
+
+// RNA reference ------------------------------------------------------------------
+
+export const RNA_STATES = [
+  { id: 'detected', label: 'Detected' },
+  { id: 'plex', label: 'Identified in TMT plex only' },
+  { id: 'absent', label: 'Not detected' },
+]
+
+/** DepMap log2(TPM+1) per protein state; lines the gene was not measured in are counted apart. */
+export function rnaByDetection(rows) {
+  const values = Object.fromEntries(RNA_STATES.map((s) => [s.id, []]))
+  let unmeasured = 0
+  for (const r of rows || []) {
+    if (!Number.isFinite(r.log2_tpm)) continue
+    if (values[r.protein_state]) values[r.protein_state].push(r.log2_tpm)
+    else unmeasured++
+  }
+  const all = Object.values(values).flat()
+  return {
+    groups: RNA_STATES.map((s) => ({ ...s, values: values[s.id], n: values[s.id].length, box: boxStats(values[s.id]) })),
+    max: all.length ? Math.max(...all) : 0,
+    unmeasured,
+  }
+}
+
+/** One-line reading of the across-line RNA–protein agreement. */
+export function rnaVerdict(agreement, flatSd = 0.5) {
+  if (!agreement) return null
+  const rho = agreement.rna_protein_spearman
+  const icc = agreement.icc
+  if (agreement.flat_rna) return { key: 'flat', text: `RNA barely varies across lines (SD < ${flatSd}); correlation is not informative.` }
+  if (!Number.isFinite(rho)) return { key: 'none', text: 'Too few lines with both RNA and protein values for a correlation.' }
+  if (rho >= 0.5 && icc >= 0.6) return { key: 'tracks', text: 'Protein tracks mRNA across lines.' }
+  if (rho < 0.3 && Number.isFinite(icc) && icc < 0.5) {
+    return { key: 'limited', text: `Low agreement, but protein reliability is limited (ICC ${fmt(icc)}); likely limited by measurement.` }
+  }
+  return { key: 'moderate', text: 'Moderate / low agreement across lines.' }
+}
+
+const GREY = 'rgba(100, 116, 139, 0.45)'
+const INDIGO = 'rgba(79, 70, 229, 0.9)'
+
+/** RNA (x) vs level 4 (y) for detected lines only; one lineage may be highlighted. */
+export function detectedScatter(rows, xKey, { transform = (x) => x, isDetected = (r) => r.protein_state === 'detected', highlight = '' } = {}) {
+  const base = []
+  const hi = []
+  let excluded = 0
+  for (const r of rows || []) {
+    const x = r[xKey]
+    if (!Number.isFinite(x)) continue
+    if (!isDetected(r)) { if (Number.isFinite(r.l4_mean)) excluded++; continue }
+    if (!Number.isFinite(r.l4_mean)) continue
+    const p = { x: transform(x), y: r.l4_mean, label: r.name || r.line, lineage: r.lineage || 'unmapped' }
+    ;(highlight && p.lineage === highlight ? hi : base).push(p)
+  }
+  const xs = [...base, ...hi].map((p) => p.x)
+  const lo = xs.length ? Math.min(...xs) : 0
+  const top = xs.length ? Math.max(...xs) : 1
+  const pad = Math.max(0.25, (top - lo) * 0.05)
+  const datasets = [{ label: 'detected lines', data: base, backgroundColor: GREY, pointRadius: 3, pointHoverRadius: 5, order: 1 }]
+  if (highlight) datasets.unshift({ label: highlight, data: hi, backgroundColor: INDIGO, pointRadius: 4, pointHoverRadius: 6, order: 0 })
+  return { n: xs.length, highlighted: hi.length, excluded, xMin: Math.max(0, lo - pad), xMax: top + pad, data: { datasets } }
+}
+
+// Co-expression -----------------------------------------------------------------
+
+export const COEXP_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'beyond', label: 'Beyond shared complexes' },
+  { id: 'validated', label: 'Validated only' },
+]
+
+export const noPartnersText = (gene, minZ = 4) =>
+  `No partners at |Z| ≥ ${minZ} for ${gene}: its co-variation across lines is not distinguishable from chance.`
+
+export function filterPartners(partners, mode = 'all') {
+  const rows = partners || []
+  if (mode === 'validated') return rows.filter((p) => p.validated)
+  if (mode === 'beyond') return rows.filter((p) => !(p.shared_complexes || []).length)
+  return rows
 }
 
 // Formatting --------------------------------------------------------------------
@@ -185,33 +246,12 @@ export function heatColor(v) {
   return `rgba(99, 102, 241, ${(0.06 + t * 0.6).toFixed(3)})`
 }
 
-// 30 distinguishable colours (one per Oncotree lineage in the atlas).
-const PALETTE = [
-  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-  '#393b79', '#e6550d', '#31a354', '#843c39', '#7b4173', '#3182bd', '#fd8d3c', '#74c476', '#ad494a', '#a55194',
-  '#6baed6', '#fdae6b', '#a1d99b', '#e7969c', '#ce6dbd', '#636363', '#bd9e39', '#9c9ede', '#e7ba52', '#17a589',
-]
-export const colorFor = (i) => PALETTE[i % PALETTE.length]
-
-/** Chart.js scatter datasets of RNA (x) vs level 4 (y), one dataset per lineage. */
-export function rnaScatter(rows, xKey, transform = (x) => x) {
-  const byLineage = new Map()
-  for (const r of rows || []) {
-    const x = r[xKey]
-    if (!Number.isFinite(x) || !Number.isFinite(r.l4_mean)) continue
-    const key = r.lineage || 'unmapped'
-    if (!byLineage.has(key)) byLineage.set(key, [])
-    byLineage.get(key).push({ x: transform(x), y: r.l4_mean, label: r.name || r.line })
-  }
-  const keys = [...byLineage.keys()].sort()
-  return {
-    n: keys.reduce((s, k) => s + byLineage.get(k).length, 0),
-    data: {
-      datasets: keys.map((k, i) => ({
-        label: k, data: byLineage.get(k), backgroundColor: colorFor(i), pointRadius: 3, pointHoverRadius: 5,
-      })),
-    },
-  }
+/** Solid fill for a level-4 value (0..1): light to dark indigo. */
+export function indigoScale(v) {
+  if (!Number.isFinite(v)) return '#e2e8f0'
+  const t = Math.min(1, Math.max(0, v))
+  const mix = (lo, hi) => Math.round(lo + (hi - lo) * t)
+  return `rgb(${mix(224, 49)}, ${mix(231, 46)}, ${mix(255, 129)})`
 }
 
 /** Sort a copy of rows by key; nulls last. */
@@ -228,28 +268,14 @@ export function sortRows(rows, key, dir = 'desc') {
   })
 }
 
-/** Portal route for a study accession: live datasets go to their page, other PXD/MSV to search. */
-export function accessionRoute(acc, liveCollections = {}) {
-  const a = String(acc || '')
-  if (liveCollections[a]) return `/collections/${liveCollections[a]}/${a}`
-  if (/^(PXD|MSV)\d+$/i.test(a)) return `/apps/dataset-search?q=${encodeURIComponent(a)}`
+/** External page for a study accession (PRIDE, MassIVE or PubMed), or '' when unknown. */
+export function accessionUrl(acc) {
+  const a = String(acc || '').trim()
+  if (/^PXD\d+$/i.test(a)) return `https://www.ebi.ac.uk/pride/archive/projects/${a.toUpperCase()}`
+  if (/^MSV\d+$/i.test(a)) return `https://massive.ucsd.edu/ProteoSAFe/dataset.jsp?accession=${a.toUpperCase()}`
+  const pmid = /^PMID:?\s*(\d+)$/i.exec(a)
+  if (pmid) return `https://pubmed.ncbi.nlm.nih.gov/${pmid[1]}`
   return ''
-}
-
-/** Rows of the Datasets tab with a resolved live/pending status. */
-export function catalogueRows(catalogue) {
-  const live = new Map((catalogue?.live_status?.live || []).map((x) => [x.accession, x.portal_collection]))
-  return (catalogue?.datasets || []).map((d) => {
-    const isLive = live.has(d.accession) || d.live === 1 || d.live === true
-    return { ...d, status: isLive ? 'live' : 'pending', portal_collection: d.portal_collection || live.get(d.accession) || '' }
-  })
-}
-
-/** Accession → portal collection for live catalogue datasets. */
-export function liveCollections(catalogue) {
-  const out = {}
-  for (const r of catalogueRows(catalogue)) if (r.status === 'live' && r.portal_collection) out[r.accession] = r.portal_collection
-  return out
 }
 
 /** Radial co-expression layout: strongest partners first from 12 o'clock and closest to the centre. */

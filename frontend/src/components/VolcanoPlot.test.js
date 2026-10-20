@@ -9,7 +9,7 @@ vi.mock('chart.js', () => {
     destroy() {}
   }
   Chart.register = () => {}
-  return { Chart, ScatterController: {}, PointElement: {}, LinearScale: {}, Tooltip: {}, Legend: {} }
+  return { Chart, ScatterController: {}, PointElement: {}, LineElement: {}, LinearScale: {}, Tooltip: {}, Legend: {} }
 })
 
 import VolcanoPlot, { toVolcanoData } from './VolcanoPlot.vue'
