@@ -71,8 +71,10 @@ describe('messages and query parsing', () => {
 
   it('reads the tab and comma lists from the query', () => {
     expect(tabFromQuery({ tab: 'compare' })).toBe('compare')
-    expect(tabFromQuery({ tab: 'bogus' })).toBe('protein')
-    expect(tabFromQuery({})).toBe('protein')
+    expect(tabFromQuery({ tab: 'bogus' })).toBe('overview')
+    expect(tabFromQuery({ gene: 'VIM' })).toBe('protein')
+    expect(tabFromQuery({ line: 'CVCL_0030' })).toBe('line')
+    expect(tabFromQuery({})).toBe('overview')
     expect(listFromQuery('a, b,,a')).toEqual(['a', 'b'])
     expect(listFromQuery(undefined)).toEqual([])
   })
@@ -169,27 +171,29 @@ describe('group dot plot', () => {
 })
 
 describe('RNA reference', () => {
-  const agree = (o) => ({ rna_protein_spearman: 0.4, icc: 0.55, flat_rna: false, ...o })
+  const agree = (o) => ({ rna_detect_auc: 0.9, rna_amount_rho: 0.7, rna_detect_lines: 300, icc: 0.55, flat_rna: false, ...o })
 
-  it('picks the verdict deterministically', () => {
-    expect(rnaVerdict(agree({ flat_rna: true, rna_protein_spearman: 0.9, icc: 0.9 })).text)
-      .toBe('RNA barely varies across lines (SD < 0.5); correlation is not informative.')
-    expect(rnaVerdict(agree({ rna_protein_spearman: 0.5, icc: 0.6 })).text).toBe('Protein tracks mRNA across lines.')
-    expect(rnaVerdict(agree({ rna_protein_spearman: 0.1, icc: 0.32 })).text)
-      .toBe('Low agreement, but protein reliability is limited (ICC 0.32); likely limited by measurement.')
-    expect(rnaVerdict(agree({ rna_protein_spearman: 0.6, icc: 0.4 })).key).toBe('moderate')
-    expect(rnaVerdict(agree({ rna_protein_spearman: 0.1, icc: 0.8 })).text).toBe('Moderate / low agreement across lines.')
-    expect(rnaVerdict(agree({ rna_protein_spearman: null })).key).toBe('none')
+  it('reads detection and amount separately', () => {
+    expect(rnaVerdict(agree({})).text)
+      .toBe('RNA predicts where the protein is detected (AUC 0.90). Where detected, the amount follows RNA (ρ 0.70).')
+    expect(rnaVerdict(agree({})).key).toBe('tracks')
+    expect(rnaVerdict(agree({ rna_detect_auc: 0.75, rna_amount_rho: 0.4 })).key).toBe('moderate')
+    expect(rnaVerdict(agree({ rna_detect_auc: null, rna_amount_rho: 0.1, icc: 0.32 })).text)
+      .toBe('Where detected, the amount barely follows RNA (ρ 0.10), but protein reliability is limited (ICC 0.32).')
+    expect(rnaVerdict(agree({ rna_detect_auc: 0.6, rna_amount_rho: null })).key).toBe('limited')
+    expect(rnaVerdict(agree({ rna_detect_auc: null, rna_amount_rho: null, rna_detect_lines: 7 })).text)
+      .toBe('Detected in 7 lines with RNA: too few to compare with RNA.')
+    expect(rnaVerdict(agree({ rna_detect_auc: null, rna_amount_rho: null, flat_rna: true })).key).toBe('flat')
     expect(rnaVerdict(null)).toBeNull()
   })
 
   const depmap = [
-    { line: 'a', name: 'A', lineage: 'Lung', log2_tpm: 5, l4_mean: 0.8, protein_state: 'detected' },
-    { line: 'b', name: 'B', lineage: 'Breast', log2_tpm: 0, l4_mean: 1, protein_state: 'detected' },
-    { line: 'c', name: 'C', lineage: 'Lung', log2_tpm: 0.5, l4_mean: 0, protein_state: 'absent' },
-    { line: 'd', name: 'D', lineage: 'Lung', log2_tpm: 1, l4_mean: 0, protein_state: 'plex' },
-    { line: 'e', name: 'E', lineage: 'Lung', log2_tpm: 2, l4_mean: null, protein_state: 'unmeasured' },
-    { line: 'f', name: 'F', lineage: 'Lung', log2_tpm: null, l4_mean: 0.5, protein_state: 'detected' },
+    { line: 'a', name: 'A', lineage: 'Lung', log2_tpm: 5, amount: 1.2, protein_state: 'detected' },
+    { line: 'b', name: 'B', lineage: 'Breast', log2_tpm: 0, amount: -0.5, protein_state: 'detected' },
+    { line: 'c', name: 'C', lineage: 'Lung', log2_tpm: 0.5, amount: null, protein_state: 'absent' },
+    { line: 'd', name: 'D', lineage: 'Lung', log2_tpm: 1, amount: null, protein_state: 'plex' },
+    { line: 'e', name: 'E', lineage: 'Lung', log2_tpm: 2, amount: null, protein_state: 'unmeasured' },
+    { line: 'f', name: 'F', lineage: 'Lung', log2_tpm: null, amount: 0.5, protein_state: 'detected' },
   ]
 
   it('groups RNA by protein state', () => {
@@ -200,17 +204,16 @@ describe('RNA reference', () => {
     expect(d.max).toBe(5)
   })
 
-  it('plots detected lines only, counts the left-out ones and pads the axis', () => {
+  it('plots amount in detected lines only, counts the not-detected ones and pads the axis', () => {
     const s = detectedScatter(depmap, 'log2_tpm')
     expect(s.n).toBe(2)
-    expect(s.excluded).toBe(2)
-    expect(s.data.datasets).toHaveLength(1)
-    expect(s.data.datasets[0].data.map((p) => p.label)).toEqual(['A', 'B'])
+    expect(s.excluded).toBe(1)
+    expect(s.data.datasets[0].data.map((p) => [p.label, p.y])).toEqual([['A', 1.2], ['B', -0.5]])
     expect(s.xMin).toBe(0)
     expect(s.xMax).toBeGreaterThan(5)
     const hi = detectedScatter(depmap, 'log2_tpm', { highlight: 'Lung' })
     expect(hi.data.datasets.map((d) => [d.label, d.data.length])).toEqual([['Lung', 1], ['detected lines', 1]])
-    const hpa = detectedScatter([{ line: 'x', ntpm: 3, l4_mean: 0.2 }, { line: 'y', ntpm: 3, l4_mean: 0 }], 'ntpm',
+    const hpa = detectedScatter([{ line: 'x', ntpm: 3, amount: 0.2 }, { line: 'y', ntpm: 3, amount: null }], 'ntpm',
       { transform: (v) => Math.log2(v + 1), isDetected: (r) => r.line === 'x' })
     expect(hpa.data.datasets[0].data).toEqual([{ x: 2, y: 0.2, label: 'x', lineage: 'unmapped' }])
     expect(hpa.excluded).toBe(1)

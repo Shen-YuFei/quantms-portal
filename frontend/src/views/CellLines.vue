@@ -22,7 +22,8 @@
         <AtlasPicker id="cl-line" kind="line" label="Cell line" placeholder="Name, CVCL_ accession or DepMap ID, e.g. MCF7" @select="selectLine" />
       </section>
 
-      <ProteinTab v-if="tab === 'protein'" :gene="gene" :by="String(route.query.by || '')"
+      <OverviewTab v-if="tab === 'overview'" @select-gene="selectGene" />
+      <ProteinTab v-else-if="tab === 'protein'" :gene="gene" :by="String(route.query.by || '')"
                   @update-by="(b) => setQuery({ by: b })"
                   @select-line="selectLine"
                   @select-gene="selectGene" @open-coexpression="(g) => setQuery({ tab: 'coexpression', gene: g })" />
@@ -56,6 +57,7 @@ import {
 } from '../cellLines.js'
 import { useRequest } from '../components/cellLines/useRequest.js'
 import AtlasPicker from '../components/cellLines/AtlasPicker.vue'
+import OverviewTab from '../components/cellLines/OverviewTab.vue'
 import ProteinTab from '../components/cellLines/ProteinTab.vue'
 import LineTab from '../components/cellLines/LineTab.vue'
 import CompareTab from '../components/cellLines/CompareTab.vue'
