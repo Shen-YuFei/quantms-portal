@@ -67,6 +67,7 @@
         </dl>
       </details>
 
+      <div class="cl-pgrid">
       <section class="cl-card">
         <div class="cl-card-head">
           <h3>Detection and abundance by {{ kindLabel }}</h3>
@@ -96,6 +97,12 @@
       </section>
 
       <section class="cl-card">
+        <div class="cl-card-head"><h3>RNA and protein across lines</h3></div>
+        <StatusBlock :loading="rna.loading.value" :error="rna.error.value" what="RNA reference" :retry="() => rna.run(gene)" />
+        <RnaPanel v-if="rna.data.value" :rna="rna.data.value" :lines="d.lines" :gene="gene" />
+      </section>
+
+      <section class="cl-card cl-span-all">
         <div class="cl-card-head">
           <h3>Values per study</h3>
           <input v-model="valueFilter" class="cl-input cl-input-sm" type="search" placeholder="Filter by study or line" aria-label="Filter per-study values" />
@@ -135,13 +142,7 @@
         </div>
       </section>
 
-      <section class="cl-card">
-        <div class="cl-card-head"><h3>RNA and protein across lines</h3></div>
-        <StatusBlock :loading="rna.loading.value" :error="rna.error.value" what="RNA reference" :retry="() => rna.run(gene)" />
-        <RnaPanel v-if="rna.data.value" :rna="rna.data.value" :lines="d.lines" :gene="gene" />
-      </section>
-
-      <section class="cl-card">
+      <section class="cl-card cl-span-all">
         <div class="cl-card-head">
           <h3>Co-expression neighbours</h3>
           <button type="button" class="cl-linkish" @click="$emit('open-coexpression', gene)">Open network →</button>
@@ -150,6 +151,7 @@
         <NeighboursTable v-if="coexp.data.value" :gene="gene" :partners="coexp.data.value.partners || []"
                          :threshold="coexp.data.value.threshold || ''" :min-z="coexp.data.value.display_min_z ?? 4" @select-gene="(g) => $emit('select-gene', g)" />
       </section>
+      </div>
     </template>
   </div>
 </template>

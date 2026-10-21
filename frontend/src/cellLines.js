@@ -21,6 +21,12 @@ const get = (path, params) => apiGet(CELL_LINES_BASE, path, params)
 
 export const getManifest = () => get('/manifest')
 export const getOverview = () => get('/overview')
+// One fetch per page load: the cell-line list backs both the Cell line browser and the Compare picker.
+let allLinesPromise = null
+export const getAllLines = () => {
+  allLinesPromise ||= get('/lines/all').then((r) => r.lines || []).catch((e) => { allLinesPromise = null; throw e })
+  return allLinesPromise
+}
 /** Query params of GET /table from the table's filter state. */
 export const tableParams = (f = {}) => ({
   q: f.q, lineage: f.lineage, cats: (f.cats || []).join(','), rels: (f.rels || []).join(','),
@@ -252,13 +258,19 @@ export const RELIABILITY_KEYS = ['reproducible', 'partial', 'uncertain', 'not sc
 export const specStyle = (c) => SPEC_STYLES[c] || SPEC_STYLES['not scored']
 export const reliabilityStyle = (c) => RELIABILITY_STYLES[c] || RELIABILITY_STYLES['not scored']
 
-/** A stable hue per lineage, spread around the colour wheel in the overview's lineage order. */
-export function lineageColors(lineages) {
-  const n = Math.max(1, lineages.length)
-  return Object.fromEntries(lineages.map((l, i) => {
-    const h = Math.round((i * 360) / n + 12) % 360
-    return [l, { fg: `hsl(${h} 62% 28%)`, bg: `hsl(${h} 75% 93%)`, dot: `hsl(${h} 60% 45%)` }]
-  }))
+/** A stable colour per lineage name, the same on every tab. */
+export function lineageColor(name) {
+  let x = 0
+  for (const ch of String(name)) x = (x * 31 + ch.charCodeAt(0)) >>> 0
+  const h = Math.round(((x * 0.618033988749895) % 1) * 360)
+  return { fg: `hsl(${h} 62% 28%)`, bg: `hsl(${h} 75% 93%)`, dot: `hsl(${h} 60% 45%)` }
+}
+export const lineageColors = (lineages) => Object.fromEntries(lineages.map((l) => [l, lineageColor(l)]))
+
+export const ACQ_STYLES = {
+  DIA: { fg: '#1e3a8a', bg: '#dbeafe' },
+  DDA: { fg: '#115e59', bg: '#ccfbf1' },
+  TMT: { fg: '#7c2d12', bg: '#ffedd5' },
 }
 
 /** Linear mix of two #rrggbb colours (t = 0..1). */

@@ -27,9 +27,9 @@
                   @update-by="(b) => setQuery({ by: b })"
                   @select-line="selectLine"
                   @select-gene="selectGene" @open-coexpression="(g) => setQuery({ tab: 'coexpression', gene: g })" />
-      <LineTab v-else-if="tab === 'line'" :line="line" @select-gene="selectGene" />
+      <LineTab v-else-if="tab === 'line'" :line="line" @select-gene="selectGene" @select-line="selectLine" />
       <CompareTab v-else-if="tab === 'compare'" v-bind="compareSel" :groups="groups.data.value || []"
-                  @update="updateCompare" @select-gene="selectGene" />
+                  @update="updateCompare" @select-gene="selectGene" @select-line="selectLine" />
       <CoexpressionTab v-else-if="tab === 'coexpression'" :gene="gene"
                        @select-gene="(g) => setQuery({ gene: g })" @open-protein="selectGene" />
       <DatasetsTab v-else-if="tab === 'datasets'" :studies="datasets.data.value" :loading="datasets.loading.value"
