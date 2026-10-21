@@ -16,10 +16,10 @@ const groups = { groups: [{ group: 'lineage', value: 'Lung', n_lines: 3 }, { gro
 const vim = {
   gene: { gene: 'VIM', reliability_class: 'reliable', icc: 0.81, spec_cat3: 'lineage enriched', spec_top3: 'Lung', n_lines_present: 2, n_lines_measured: 3, n_studies: 4, is_family: false, contamination_prone: true },
   lines: [
-    { line: 'CVCL_0001', name: 'L1', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.9, n_studies_measured: 2, n_studies_present: 2, n_studies_present_high: 2 },
-    { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.5, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0 },
+    { line: 'CVCL_0001', name: 'L1', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.9, l3_mean: 1.6, n_studies_measured: 2, n_studies_present: 2, n_studies_present_high: 2 },
+    { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.5, l3_mean: 0, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0 },
     { line: 'CVCL_0004', name: 'L3', lineage: 'Lung', primary_disease: 'SCLC', l4_mean: 0, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 },
-    { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.4, n_studies_measured: 1, n_studies_present: 1, n_studies_present_high: 0 },
+    { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.4, l3_mean: -0.4, n_studies_measured: 1, n_studies_present: 1, n_studies_present_high: 0 },
   ],
   values: [
     { study: 'S1', line: 'CVCL_0001', l1: 20.1, l3: 0.3, present: true, present_high: true, n_pep: 5, acq: 'DIA', comparability: 'full' },
@@ -107,6 +107,15 @@ describe('CellLines view', () => {
     expect(table.text()).not.toContain('l3')
   })
 
+  it('warns on the cross-study plot only when the protein does not reproduce between labs', async () => {
+    respond({ '/genes/VIM': { ...vim, gene: { ...vim.gene, reliability_class: 'partial', icc: 0.39 } } })
+    let { w } = await mountAt('/apps/cell-lines?gene=VIM')
+    expect(w.find('[data-test="box-reliability"]').text()).toContain('reproduce only weakly between labs (ICC 0.39)')
+    respond({ '/genes/VIM': { ...vim, gene: { ...vim.gene, reliability_class: 'reproducible' } } })
+    ;({ w } = await mountAt('/apps/cell-lines?gene=VIM'))
+    expect(w.find('[data-test="box-reliability"]').exists()).toBe(false)
+  })
+
   it('reads tab and gene from the URL and writes tab changes back', async () => {
     respond()
     const { w, router } = await mountAt('/apps/cell-lines?tab=protein&gene=VIM')
@@ -170,9 +179,9 @@ describe('CellLines view', () => {
   })
 
   it('draws box plots by group with points, highlight, tooltips and line navigation', async () => {
-    const mk = (i, l4, present, plex = 0, lineage = 'Lung') => ({ line: `CVCL_10${i}`, name: `N${i}`, lineage, primary_disease: 'NSCLC', l4_mean: l4, n_studies_measured: 1, n_studies_present: present, n_studies_present_high: 0, n_studies_plex_identified: plex })
-    const lines = [...vim.lines, mk(1, 0.8, 1), mk(2, 0.6, 1), mk(3, 0.2, 0), mk(4, 0.3, 0, 1), mk(5, null, 1),
-      mk(6, 0.9, 1, 0, 'Skin'), mk(7, 0.7, 1, 0, 'Skin'), mk(8, 0.5, 0, 0, 'Skin')]
+    const mk = (i, l3, present, plex = 0, lineage = 'Lung') => ({ line: `CVCL_10${i}`, name: `N${i}`, lineage, primary_disease: 'NSCLC', l4_mean: 0.5, l3_mean: l3, n_studies_measured: 1, n_studies_present: present, n_studies_present_high: 0, n_studies_plex_identified: plex })
+    const lines = [...vim.lines, mk(1, 1.2, 1), mk(2, 0.4, 1), mk(3, -1, 0), mk(4, 0.3, 0, 1), mk(5, null, 1), mk(9, null, 0),
+      mk(6, 2.5, 1, 0, 'Skin'), mk(7, 2, 1, 0, 'Skin'), mk(8, 1, 0, 0, 'Skin')]
     const groupsApi = [
       { kind: 'lineage', value: 'Skin', n_called: 3, n_detected: 2, enrichment: 0.4, n_studies: 2, n_lines: 3 },
       { kind: 'lineage', value: 'Lung', n_called: 6, n_detected: 3, enrichment: 0.1, n_studies: 2, n_lines: 8 },
@@ -183,18 +192,20 @@ describe('CellLines view', () => {
     const plot = w.find('[data-test="boxplot"]')
     const groups = plot.findAll('[data-test="box-group"]')
     expect(groups.map((g) => g.find('title').text())).toEqual(['Skin', 'Lung'])
-    const lungPts = groups[1].findAll('circle')
+    const lungPts = groups[1].findAll('circle:not(.cl-pt-absent)')
     expect(lungPts.map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002', 'CVCL_101', 'CVCL_102', 'CVCL_103'])
     expect(lungPts.map((c) => c.classes().includes('cl-pt-on'))).toEqual([true, false, true, true, false])
+    expect(groups[1].findAll('circle.cl-pt-absent').map((c) => c.attributes('data-line'))).toEqual(['CVCL_109'])
     expect(groups[1].find('.cl-box-iqr').exists()).toBe(true)
 
     await groups[1].find('.cl-box-hit').trigger('mouseenter')
     const tip = w.find('[data-test="box-tip"]').text()
-    expect(tip).toContain('Lung · 5 lines · median 60% · middle half 50%–80%')
+    expect(tip).toContain('Lung · 5 cell lines with a value · median +0.40 log2 (1.3× the average) · middle half ±0.00 to +1.20')
+    expect(tip).toContain('1 measured, not detected')
     expect(tip).toContain('+0.10 vs other cell lines in the same studies')
-    expect(tip).toContain('+2 lines without a presence call, not shown')
+    expect(tip).toContain('+2 cell lines measured only in pooled samples, not shown')
     await lungPts[0].trigger('mouseenter')
-    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · more than 90% of the cell lines in its studies')
+    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · +1.60 log2 · 3.0× the average')
 
     await w.find('[data-test="hi-lineage"]').setValue('Skin')
     expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_106', 'CVCL_107', 'CVCL_108'])

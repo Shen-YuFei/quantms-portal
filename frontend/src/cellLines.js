@@ -157,22 +157,30 @@ export function tukeyBox(values) {
 }
 
 /**
- * Box-plot groups in dot-plot order. Points are lines with a rank and a presence call; lines
- * without a presence call are counted, not plotted, since their rank would read as expression.
+ * Cross-study groups in dot-plot order. Points are lines with a mean difference from their studies'
+ * averages (l3_mean); measured lines without a value are not detected (n.d.); lines without a presence
+ * call are counted, not plotted.
  */
 export function groupBoxes(lines, groups, kind = 'lineage') {
   return groupDots(lines, groups, kind).map((g) => {
-    const points = g.rows
-      .filter((r) => r.state !== 'nocall' && Number.isFinite(r.l4_mean))
-      .map((r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease, l4_mean: r.l4_mean, detected: r.state === 'high' || r.state === 'detected' }))
+    const rows = g.rows.filter((r) => r.state !== 'nocall')
+    const row = (r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease })
+    const points = rows.filter((r) => Number.isFinite(r.l3_mean))
+      .map((r) => ({ ...row(r), value: r.l3_mean, detected: r.state === 'high' || r.state === 'detected' }))
+    const absent = rows.filter((r) => !Number.isFinite(r.l3_mean) && r.state === 'absent').map(row)
+    const vals = points.map((p) => p.value)
     return {
-      value: g.value, enrichment: g.enrichment, points, nocall: g.rows.filter((r) => r.state === 'nocall').length,
-      median: boxStats(points.map((p) => p.l4_mean))?.median ?? null,
-      box: points.length >= BOX_MIN_LINES ? tukeyBox(points.map((p) => p.l4_mean)) : null,
-      small: g.small || points.length < MIN_GROUP_LINES,
+      value: g.value, enrichment: g.enrichment, points, absent, nocall: g.rows.filter((r) => r.state === 'nocall').length,
+      median: boxStats(vals)?.median ?? null,
+      box: vals.length >= BOX_MIN_LINES ? tukeyBox(vals) : null,
+      small: g.small || points.length + absent.length < MIN_GROUP_LINES,
     }
-  }).filter((g) => g.points.length)
+  }).filter((g) => g.points.length || g.absent.length)
 }
+
+/** A log2 difference in words: "2.0× the average" / "2.0× below the average". */
+export const foldText = (v, what = 'the average') =>
+  (v >= 0 ? `${fmt(2 ** v, 1)}× ${what}` : `${fmt(2 ** -v, 1)}× below ${what}`)
 
 // Profile within one study ------------------------------------------------------
 
