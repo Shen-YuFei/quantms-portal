@@ -5,7 +5,7 @@
         <h3>All cell lines</h3>
         <span class="cl-muted">Search above, or filter and sort the list; click a name to open its proteome.</span>
       </div>
-      <LineBrowser @open="(l) => $emit('select-line', l)" />
+      <LineBrowser :key="`all-${lineage}`" :initial-lineage="lineage" @open="(l) => $emit('select-line', l)" />
     </section>
     <StatusBlock v-else :loading="req.loading.value" :error="req.error.value" :what="`Cell line ${line}`"
                  :loading-text="`Loading ${line}…`" :retry="load" />
@@ -38,28 +38,6 @@
         <p class="cl-caption">QC flags are shown as information only; the frozen atlas does not re-filter on them.</p>
       </section>
 
-      <section class="cl-card">
-        <div class="cl-card-head"><h3>Studies</h3></div>
-        <div v-if="!d.studies?.length" class="cl-empty">No studies listed for this line.</div>
-        <div v-else class="cl-table-wrap">
-          <table class="cl-table" data-test="studies-table">
-            <thead><tr><th>Study</th><th class="num">Lines</th><th>Accessions</th></tr></thead>
-            <tbody>
-              <tr v-for="st in d.studies" :key="st.study">
-                <td>{{ st.study }}</td>
-                <td class="num">{{ st.n_lines ?? '—' }}</td>
-                <td>
-                  <template v-for="(acc, i) in asList(st.accessions)" :key="acc">
-                    <span v-if="i">, </span>
-                    <a v-if="accessionUrl(acc)" :href="accessionUrl(acc)" target="_blank" rel="noopener">{{ acc }}</a>
-                    <span v-else>{{ acc }}</span>
-                  </template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <div class="cl-grid-2">
         <section v-for="t in distinctive" :key="t.key" class="cl-card">
@@ -82,6 +60,29 @@
       </div>
       <p class="cl-caption" data-test="line-distinct-caption">Compared with the rest of its lineage in the same studies (A49).</p>
 
+      <div class="cl-grid-2">
+      <section class="cl-card">
+        <div class="cl-card-head"><h3>Studies</h3></div>
+        <div v-if="!d.studies?.length" class="cl-empty">No studies listed for this line.</div>
+        <div v-else class="cl-table-wrap">
+          <table class="cl-table" data-test="studies-table">
+            <thead><tr><th>Study</th><th class="num">Lines</th><th>Accessions</th></tr></thead>
+            <tbody>
+              <tr v-for="st in d.studies" :key="st.study">
+                <td>{{ st.study }}</td>
+                <td class="num">{{ st.n_lines ?? '—' }}</td>
+                <td>
+                  <template v-for="(acc, i) in asList(st.accessions)" :key="acc">
+                    <span v-if="i">, </span>
+                    <a v-if="accessionUrl(acc)" :href="accessionUrl(acc)" target="_blank" rel="noopener">{{ acc }}</a>
+                    <span v-else>{{ acc }}</span>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       <section class="cl-card">
         <div class="cl-card-head"><h3>Lineage-enriched proteins detected in this line</h3></div>
         <div v-if="!d.lineage_enriched_present?.length" class="cl-empty">None of the {{ m.lineage }}-enriched proteins are detected in this line.</div>
@@ -100,6 +101,7 @@
           </table>
         </div>
       </section>
+      </div>
     </template>
     <details v-if="line && d" class="cl-card cl-browse" data-test="line-browse">
       <summary>Browse all cell lines<span class="cl-muted"> · starts filtered to {{ m.lineage }}</span></summary>
@@ -117,6 +119,7 @@ import LineBrowser from './LineBrowser.vue'
 
 const props = defineProps({
   line: { type: String, default: '' },
+  lineage: { type: String, default: '' },
 })
 defineEmits(['select-gene', 'select-line'])
 

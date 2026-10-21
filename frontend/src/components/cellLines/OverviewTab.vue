@@ -18,13 +18,22 @@
           </div>
           <LineageHeatmap :heatmap="d.heatmap" :lineages="d.lineages" @pick="pickMarker" />
         </section>
-        <section class="cl-card cl-ov-land">
-          <div class="cl-card-head">
-            <h3>Protein landscape</h3>
-            <span class="cl-muted">{{ fmtInt(d.landscape.rows.length) }} proteins · colour = specificity · size = co-expression partners · click a dot to list it below</span>
-          </div>
-          <ProteinLandscape :landscape="d.landscape" @pick="(g) => pickGene(g)" />
-        </section>
+        <div class="cl-ov-side">
+          <section class="cl-card cl-ov-land">
+            <div class="cl-card-head">
+              <h3>Protein landscape</h3>
+              <span class="cl-muted">{{ fmtInt(d.landscape.rows.length) }} proteins · colour = specificity · size = co-expression partners · click a dot to list it below</span>
+            </div>
+            <ProteinLandscape :landscape="d.landscape" @pick="(g) => pickGene(g)" />
+          </section>
+          <section class="cl-card">
+            <div class="cl-card-head">
+              <h3>Cell lines by lineage</h3>
+              <span class="cl-muted">{{ fmtInt(d.tiles.lines) }} cell lines</span>
+            </div>
+            <LineageBars @select-lineage="(l) => $emit('select-lineage', l)" />
+          </section>
+        </div>
       </div>
 
       <section ref="tableCard" class="cl-card">
@@ -44,8 +53,9 @@ import StatusBlock from './StatusBlock.vue'
 import LineageHeatmap from './LineageHeatmap.vue'
 import ProteinLandscape from './ProteinLandscape.vue'
 import ProteinTable from './ProteinTable.vue'
+import LineageBars from './LineageBars.vue'
 
-defineEmits(['select-gene'])
+defineEmits(['select-gene', 'select-lineage'])
 
 const ov = useRequest(getOverview)
 const d = computed(() => ov.data.value)
