@@ -47,17 +47,47 @@ const coexp = {
 }
 const rnaBody = {
   depmap: [
-    { line: 'CVCL_0001', name: 'L1', lineage: 'Lung', log2_tpm: 8, l4_mean: 0.9, protein_state: 'detected' },
-    { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', log2_tpm: 6, l4_mean: 0.4, protein_state: 'detected' },
-    { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', log2_tpm: 1, l4_mean: 0, protein_state: 'absent' },
-    { line: 'CVCL_0004', name: 'L3', lineage: 'Lung', log2_tpm: 2, l4_mean: 0, protein_state: 'plex' },
-    { line: 'CVCL_0009', name: 'X9', lineage: 'Skin', log2_tpm: 12, l4_mean: null, protein_state: 'unmeasured' },
+    { line: 'CVCL_0001', name: 'L1', lineage: 'Lung', log2_tpm: 8, amount: 1.6, protein_state: 'detected' },
+    { line: 'CVCL_0003', name: 'B1', lineage: 'Breast', log2_tpm: 6, amount: -0.4, protein_state: 'detected' },
+    { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', log2_tpm: 1, amount: null, protein_state: 'absent' },
+    { line: 'CVCL_0004', name: 'L3', lineage: 'Lung', log2_tpm: 2, amount: null, protein_state: 'plex' },
+    { line: 'CVCL_0009', name: 'X9', lineage: 'Skin', log2_tpm: 12, amount: null, protein_state: 'unmeasured' },
   ],
-  hpa: [{ line: 'CVCL_0001', name: 'L1', lineage: 'Lung', ntpm: 255, l4_mean: 0.9 }, { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', ntpm: 3, l4_mean: 0 }],
-  agreement: { rna_protein_spearman: 0.72, rna_protein_lines: 400, rna_sd: 2.1, flat_rna: false, icc: 0.81, reliability_class: 'reliable', n_lines_present: 2, n_lines_measured: 4, n_lines_plex_only: 1, rho_percentile: 0.93 },
-  atlas: { bin: 0.05, hist: [[0.3, 10], [0.7, 4]], median: 0.35, genes: 9000, flat_rna_sd: 0.5 },
+  hpa: [{ line: 'CVCL_0001', name: 'L1', lineage: 'Lung', ntpm: 255, amount: 1.6 }, { line: 'CVCL_0002', name: 'L2', lineage: 'Lung', ntpm: 3, amount: null }],
+  agreement: { rna_detect_auc: 0.96, rna_detect_lines: 83, rna_undetected_lines: 620, rna_amount_rho: 0.77, rna_amount_lines: 73, rna_sd: 2.1, flat_rna: false, icc: 0.81, reliability_class: 'reliable', n_lines_present: 2, n_lines_measured: 4, n_lines_plex_only: 1, auc_percentile: 0.97, rho_percentile: 0.99 },
+  atlas: { bin: 0.05, flat_rna_sd: 0.5, auc: { hist: [[0.7, 10], [0.95, 4]], median: 0.73, genes: 8990 }, rho: { hist: [[0.3, 10], [0.75, 4]], median: 0.39, genes: 8977 } },
   sources: {},
 }
+
+const overview = {
+  tiles: { proteins: 15704, lines: 1119, lineages: 28, diseases: 93, studies: 14, reproducible: 2159, enriched: 240,
+    enhanced: 1414, robust: 335, coexpression_links: 7825, coexpression_proteins: 3135, complexes: 2489 },
+  lineages: [{ lineage: 'Lung', lines: 120 }, { lineage: 'Breast', lines: 60 }],
+  heatmap: [
+    { gene: 'SFTPB', lineage: 'Lung', spec_cat3: 'lineage enriched', enrichment: [0.6, -0.1] },
+    { gene: 'TRPS1', lineage: 'Breast', spec_cat3: 'enhanced', enrichment: [-0.05, 0.49] },
+  ],
+  landscape: { columns: ['gene', 'detected_fraction', 'icc', 'spec_cat3', 'coexpression_partners'],
+    rows: [['VIM', 0.9, 0.74, 'low specificity', 12], ['SFTPB', 0.1, null, 'lineage enriched', 0]] },
+}
+const tableRow = (o) => ({
+  gene: 'VIM', protein_name: 'Vimentin', accession: 'P08670', n_lines_present: 971, n_lines_measured: 1119,
+  n_lines_present_high: 960, n_studies: 14, detected_fraction: 0.87, reliability_class: 'reproducible', icc: 0.74,
+  spec_cat3: 'low specificity', spec_top: [], spec_robust: true, spec_lab_reproducible: false, rna_detect_auc: 0.87,
+  rna_amount_rho: 0.9, coexpression_partners: 12, coexpression_top: ['DES', 'LMNA'], n_complexes: 0, complex_name: null,
+  contamination_prone: false, is_family: false, lineage_enrichment: null, lineage_detected: null, lineage_called: null, ...o,
+})
+const table = (params) => ({
+  total: 2, offset: 0, lineage: params.lineage || null, sort: params.sort || (params.lineage ? 'lineage' : 'specificity'),
+  descending: params.lineage ? true : false,
+  facets: { spec_cat3: { 'lineage enriched': 1, 'low specificity': 1 }, reliability_class: { reproducible: 1, 'not scored': 1 } },
+  rows: [
+    tableRow({ gene: 'SFTPB', protein_name: 'Pulmonary surfactant-associated protein B', accession: 'P07988', spec_cat3: 'lineage enriched',
+      spec_top: ['Lung'], reliability_class: 'not scored', icc: null, rna_detect_auc: null, rna_amount_rho: null, coexpression_partners: 0,
+      coexpression_top: [], lineage_enrichment: params.lineage ? 0.6 : null, lineage_detected: 12, lineage_called: 40 }),
+    tableRow({}),
+  ],
+})
 
 function respond(overrides = {}) {
   apiGet.mockImplementation(async (base, path, params) => {
@@ -67,6 +97,8 @@ function respond(overrides = {}) {
       return typeof v === 'function' ? v(params) : v
     }
     if (path === '/manifest') return manifest
+    if (path === '/overview') return overview
+    if (path === '/table') return table(params)
     if (path === '/groups') return groups
     if (path === '/genes/VIM') return vim
     if (path === '/genes/VIM/rna') return rnaBody
@@ -88,6 +120,39 @@ async function mountAt(path) {
 
 describe('CellLines view', () => {
   beforeEach(() => { apiGet.mockReset() })
+
+  it('opens on the overview: tiles, lineage map, landscape and a colour-coded protein table', async () => {
+    respond()
+    const { w, router } = await mountAt('/apps/cell-lines')
+    expect(w.find('[data-tab="overview"]').attributes('aria-selected')).toBe('true')
+    const tiles = w.findAll('[data-test="tiles"] .cl-tile')
+    expect(tiles).toHaveLength(7)
+    expect(tiles[0].text()).toContain('15,704')
+    expect(tiles[4].text()).toContain('240lineage / group enriched1,414 more enhanced · 335 robust calls')
+    expect(w.findAll('[data-test="heatmap"] .cl-heat-body').map((r) => r.attributes('data-gene'))).toEqual(['SFTPB', 'TRPS1'])
+    const rows = w.findAll('[data-test="protein-row"]')
+    expect(rows.map((r) => r.find('.cl-pt-gene').text())).toEqual(['SFTPB', 'VIM'])
+    expect(rows[1].text()).toContain('971 / 1,119 lines')
+    expect(rows[1].find('.cl-strength-strong').text()).toBe('detect 0.87')
+    expect(rows[0].text()).toContain('too few detections')
+    expect(w.findAll('[data-test="spec-chip"]')[0].text()).toBe('lineage enriched 1')
+    expect(w.find('[data-test="table-csv"]').attributes('href')).toMatch(/\/table\?format=csv$/)
+
+    await w.findAll('[data-test="heatmap"] .cl-heat-body')[0].trigger('click')
+    await flushPromises()
+    const last = apiGet.mock.calls.filter((c) => c[1] === '/table').at(-1)[2]
+    expect([last.q, last.lineage]).toEqual(['SFTPB', 'Lung'])
+    expect(w.find('[data-test="protein-table"]').text()).toContain('In Lung')
+    expect(w.find('[data-test="protein-table"]').text()).toContain('detected in 12 of 40 lines')
+
+    await tiles[3].trigger('click')
+    await flushPromises()
+    expect(apiGet.mock.calls.filter((c) => c[1] === '/table').at(-1)[2].rels).toBe('reproducible')
+
+    await rows[1].find('.cl-pt-gene').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'protein', gene: 'VIM' })
+  })
 
   it('profiles the gene within one study, with not-detected lines apart, and groups the values table by study', async () => {
     respond()
@@ -242,22 +307,24 @@ describe('CellLines view', () => {
   it('shows the RNA verdict, detection groups and a detected-only scatter', async () => {
     respond()
     const { w } = await mountAt('/apps/cell-lines?gene=VIM')
-    expect(w.find('[data-test="rna-verdict"]').text()).toBe('Protein tracks mRNA across lines.')
+    expect(w.find('[data-test="rna-verdict"]').text())
+      .toBe('RNA predicts where the protein is detected (AUC 0.96). Where detected, the amount follows RNA (ρ 0.77).')
     expect(w.findAll('[data-test="rna-detection-row"]').map((r) => r.find('.cl-presence-label').text()))
       .toEqual(['Detected n=2', 'Not detected n=1'])
     const chart = w.findComponent({ name: 'ScatterChart' })
-    expect(chart.props('data').datasets[0].data.map((p) => p.label)).toEqual(['L1', 'B1'])
-    expect(w.find('[data-test="rna-scatter-note"]').text()).toContain('2 measured but non-detected lines')
-    expect(w.find('[data-test="rho-hist"]').text()).toContain('93% percentile')
+    expect(chart.props('data').datasets[0].data.map((p) => [p.label, p.y])).toEqual([['L1', 1.6], ['B1', -0.4]])
+    expect(w.find('[data-test="rna-scatter-note"]').text()).toContain('1 line where the protein was not detected is left out')
+    expect(w.find('[data-test="rna-hist-auc"]').text()).toContain('VIM 0.96 over 703 lines, 97% percentile')
+    expect(w.find('[data-test="rna-hist-rho"]').text()).toContain('VIM 0.77 over 73 lines, 99% percentile · atlas median 0.39 over 8977 genes')
     expect(w.text()).toContain('whether the protein was detected. 1 line without a presence call is not shown. 1 line with RNA')
-    expect(w.text()).toContain('Edfors et al. 2016')
+    expect(w.text()).toContain('0.5 = chance')
 
     await w.findAll('button').find((b) => b.text() === 'HPA cell lines').trigger('click')
     expect(w.findComponent({ name: 'ScatterChart' }).props('data').datasets[0].data.map((p) => p.label)).toEqual(['L1'])
   })
 
   it('skips the scatter when RNA is flat', async () => {
-    respond({ '/genes/VIM/rna': { ...rnaBody, agreement: { ...rnaBody.agreement, flat_rna: true } } })
+    respond({ '/genes/VIM/rna': { ...rnaBody, agreement: { ...rnaBody.agreement, flat_rna: true, rna_detect_auc: null, rna_amount_rho: null } } })
     const { w } = await mountAt('/apps/cell-lines?gene=VIM')
     expect(w.find('[data-test="rna-verdict"]').text()).toContain('RNA barely varies across lines')
     expect(w.find('[data-test="rna-flat"]').exists()).toBe(true)

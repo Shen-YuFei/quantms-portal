@@ -15,7 +15,7 @@ export class ApiError extends Error {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function buildQuery(params) {
+export function buildQuery(params) {
   if (!params) return ''
   const usp = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {

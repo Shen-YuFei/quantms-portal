@@ -1,9 +1,10 @@
 // Cancer Cell Line Proteome API wrappers and pure display helpers.
-import { apiGet, encodePath } from './api.js'
+import { apiGet, buildQuery, encodePath } from './api.js'
 import { CELL_LINES_BASE } from './config.js'
 
 export const MAX_COMPARE_LINES = 5
 export const TABS = [
+  { id: 'overview', label: 'Overview' },
   { id: 'protein', label: 'Protein' },
   { id: 'line', label: 'Cell line' },
   { id: 'compare', label: 'Compare' },
@@ -19,6 +20,15 @@ export const L4_AXIS = 'Rank among cell lines in the same study (0 = least, 1 = 
 const get = (path, params) => apiGet(CELL_LINES_BASE, path, params)
 
 export const getManifest = () => get('/manifest')
+export const getOverview = () => get('/overview')
+/** Query params of GET /table from the table's filter state. */
+export const tableParams = (f = {}) => ({
+  q: f.q, lineage: f.lineage, cats: (f.cats || []).join(','), rels: (f.rels || []).join(','),
+  hide_flagged: f.hide ? 'true' : '', sort: f.sort, descending: f.descending === undefined ? '' : String(f.descending),
+  offset: f.offset, limit: f.limit,
+})
+export const getTable = (f) => get('/table', tableParams(f))
+export const tableCsvUrl = (f) => `${CELL_LINES_BASE}/table${buildQuery({ ...tableParams({ ...f, offset: undefined, limit: undefined }), format: 'csv' })}`
 export const searchGenes = (q, limit = 12) => get('/genes', { q, limit }).then((r) => r.genes || [])
 export const getGene = (gene) => get(`/genes/${encodePath(gene)}`)
 export const getGeneRna = (gene) => get(`/genes/${encodePath(gene)}/rna`)
@@ -48,7 +58,8 @@ export function compare(selection) {
 /** Tab id from the URL query, defaulting to the protein tab. */
 export function tabFromQuery(query) {
   const t = String(query?.tab || '')
-  return TABS.some((x) => x.id === t) ? t : 'protein'
+  if (TABS.some((x) => x.id === t)) return t
+  return query?.gene ? 'protein' : query?.line ? 'line' : 'overview'
 }
 
 /** Split a comma list from the URL query ("a,b" or ["a","b"]). */
@@ -219,6 +230,89 @@ export function profileAxis(groups) {
   return { min: -m, max: m, ticks }
 }
 
+// Overview ------------------------------------------------------------------------
+
+export const SPEC_STYLES = {
+  'lineage enriched': { fg: '#5b21b6', bg: '#ede9fe', dot: '#7c3aed' },
+  'group enriched': { fg: '#1e40af', bg: '#dbeafe', dot: '#2563eb' },
+  enhanced: { fg: '#115e59', bg: '#ccfbf1', dot: '#0d9488' },
+  'low specificity': { fg: '#475569', bg: '#f1f5f9', dot: '#94a3b8' },
+  insufficient: { fg: '#64748b', bg: '#ffffff', dot: '#cbd5e1' },
+  'not detected': { fg: '#64748b', bg: '#ffffff', dot: '#cbd5e1' },
+  'not scored': { fg: '#64748b', bg: '#ffffff', dot: '#e2e8f0' },
+}
+export const SPEC_KEYS = ['lineage enriched', 'group enriched', 'enhanced', 'low specificity', 'insufficient', 'not scored']
+export const RELIABILITY_STYLES = {
+  reproducible: { fg: '#14532d', bg: '#dcfce7', bar: '#16a34a' },
+  partial: { fg: '#78350f', bg: '#fef3c7', bar: '#d97706' },
+  uncertain: { fg: '#881337', bg: '#ffe4e6', bar: '#e11d48' },
+  'not scored': { fg: '#64748b', bg: '#f8fafc', bar: '#cbd5e1' },
+}
+export const RELIABILITY_KEYS = ['reproducible', 'partial', 'uncertain', 'not scored']
+export const specStyle = (c) => SPEC_STYLES[c] || SPEC_STYLES['not scored']
+export const reliabilityStyle = (c) => RELIABILITY_STYLES[c] || RELIABILITY_STYLES['not scored']
+
+/** A stable hue per lineage, spread around the colour wheel in the overview's lineage order. */
+export function lineageColors(lineages) {
+  const n = Math.max(1, lineages.length)
+  return Object.fromEntries(lineages.map((l, i) => {
+    const h = Math.round((i * 360) / n + 12) % 360
+    return [l, { fg: `hsl(${h} 62% 28%)`, bg: `hsl(${h} 75% 93%)`, dot: `hsl(${h} 60% 45%)` }]
+  }))
+}
+
+/** Linear mix of two #rrggbb colours (t = 0..1). */
+export function mixHex(a, b, t) {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16))
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16))
+  const k = Math.min(1, Math.max(0, t))
+  return `rgb(${pa.map((x, i) => Math.round(x + (pb[i] - x) * k)).join(', ')})`
+}
+
+/** Heatmap rows grouped by their top lineage, with a flag on the first row of each group. */
+export function heatmapRows(heatmap) {
+  let prev = null
+  return (heatmap || []).map((r) => {
+    const first = r.lineage !== prev
+    prev = r.lineage
+    return { ...r, first }
+  })
+}
+
+// Proteins without a reproducibility score are drawn in a band below the axis.
+export const LANDSCAPE_NOSCORE_Y = -0.35
+
+/** Landscape scatter: one dataset per specificity group; dot size grows with co-expression partners. */
+export function landscapeDatasets(landscape) {
+  const cols = landscape?.columns || []
+  const at = Object.fromEntries(cols.map((c, i) => [c, i]))
+  const groups = ['lineage enriched', 'group enriched', 'enhanced', 'low specificity', 'other']
+  const by = Object.fromEntries(groups.map((g) => [g, []]))
+  ;(landscape?.rows || []).forEach((r, i) => {
+    const cat = r[at.spec_cat3]
+    const key = by[cat] ? cat : 'other'
+    const icc = r[at.icc]
+    by[key].push({
+      x: r[at.detected_fraction] ?? 0,
+      y: Number.isFinite(icc) ? Math.max(-0.2, icc) : LANDSCAPE_NOSCORE_Y + (((i * 37) % 17) - 8) * 0.008,
+      gene: r[at.gene], cat, icc, cx: r[at.coexpression_partners] || 0,
+    })
+  })
+  const rgba = (hex, a) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')}, ${a})`
+  return groups.map((g) => {
+    const style = g === 'other' ? SPEC_STYLES.insufficient : SPEC_STYLES[g]
+    const strong = g !== 'low specificity' && g !== 'other'
+    return {
+      label: g === 'other' ? 'insufficient / not scored' : g,
+      data: by[g],
+      backgroundColor: rgba(style.dot, strong ? 0.85 : 0.3),
+      pointRadius: by[g].map((p) => 1.6 + Math.min(5, p.cx / 4)),
+      pointHoverRadius: 6,
+      order: strong ? 0 : 1,
+    }
+  })
+}
+
 // RNA reference ------------------------------------------------------------------
 
 export const RNA_STATES = [
@@ -247,24 +341,42 @@ export function rnaByDetection(rows) {
   }
 }
 
-/** One-line reading of the across-line RNA–protein agreement. */
+// RNA agreement strength cut-offs (display choices): detection AUC and amount Spearman.
+export const RNA_AUC_CUTS = [0.85, 0.7]
+export const RNA_RHO_CUTS = [0.6, 0.35]
+export const rnaStrength = (v, [strong, moderate]) =>
+  (!Number.isFinite(v) ? 'none' : v >= strong ? 'strong' : v >= moderate ? 'moderate' : 'weak')
+
+/** Plain reading of RNA vs protein: whether RNA predicts detection, then whether amount follows RNA. */
 export function rnaVerdict(agreement, flatSd = 0.5) {
   if (!agreement) return null
-  const rho = agreement.rna_protein_spearman
+  const auc = agreement.rna_detect_auc
+  const rho = agreement.rna_amount_rho
   const icc = agreement.icc
-  if (agreement.flat_rna) return { key: 'flat', text: `RNA barely varies across lines (SD < ${flatSd}); correlation is not informative.` }
-  if (!Number.isFinite(rho)) return { key: 'none', text: 'Too few lines with both RNA and protein values for a correlation.' }
-  if (rho >= 0.5 && icc >= 0.6) return { key: 'tracks', text: 'Protein tracks mRNA across lines.' }
-  if (rho < 0.3 && Number.isFinite(icc) && icc < 0.5) {
-    return { key: 'limited', text: `Low agreement, but protein reliability is limited (ICC ${fmt(icc)}); likely limited by measurement.` }
+  if (!Number.isFinite(auc) && !Number.isFinite(rho)) {
+    if (agreement.flat_rna) return { key: 'flat', text: `RNA barely varies across lines (SD < ${flatSd}); a comparison is not informative.` }
+    return { key: 'none', text: `Detected in ${agreement.rna_detect_lines ?? 0} lines with RNA: too few to compare with RNA.` }
   }
-  return { key: 'moderate', text: 'Moderate / low agreement across lines.' }
+  const parts = []
+  const a = rnaStrength(auc, RNA_AUC_CUTS)
+  if (a === 'strong') parts.push(`RNA predicts where the protein is detected (AUC ${fmt(auc)}).`)
+  else if (a === 'moderate') parts.push(`RNA partly predicts where the protein is detected (AUC ${fmt(auc)}).`)
+  else if (a === 'weak') parts.push(`RNA does not predict where the protein is detected (AUC ${fmt(auc)}).`)
+  const r = rnaStrength(rho, RNA_RHO_CUTS)
+  if (r === 'strong') parts.push(`Where detected, the amount follows RNA (ρ ${fmt(rho)}).`)
+  else if (r === 'moderate') parts.push(`Where detected, the amount follows RNA moderately (ρ ${fmt(rho)}).`)
+  else if (r === 'weak') {
+    parts.push(`Where detected, the amount barely follows RNA (ρ ${fmt(rho)})` +
+      (Number.isFinite(icc) && icc < 0.5 ? `, but protein reliability is limited (ICC ${fmt(icc)}).` : '.'))
+  }
+  const best = [a, r].includes('strong') ? 'tracks' : [a, r].includes('moderate') ? 'moderate' : 'limited'
+  return { key: best, text: parts.join(' ') }
 }
 
 const GREY = 'rgba(100, 116, 139, 0.45)'
 const INDIGO = 'rgba(79, 70, 229, 0.9)'
 
-/** RNA (x) vs level 4 (y) for detected lines only; one lineage may be highlighted. */
+/** RNA (x) vs amount (y, log2 difference from the study average) for detected lines; one lineage may be highlighted. */
 export function detectedScatter(rows, xKey, { transform = (x) => x, isDetected = (r) => r.protein_state === 'detected', highlight = '' } = {}) {
   const base = []
   const hi = []
@@ -272,9 +384,9 @@ export function detectedScatter(rows, xKey, { transform = (x) => x, isDetected =
   for (const r of rows || []) {
     const x = r[xKey]
     if (!Number.isFinite(x)) continue
-    if (!isDetected(r)) { if (Number.isFinite(r.l4_mean)) excluded++; continue }
-    if (!Number.isFinite(r.l4_mean)) continue
-    const p = { x: transform(x), y: r.l4_mean, label: r.name || r.line, lineage: r.lineage || 'unmapped' }
+    if (!isDetected(r)) { if (!['unmeasured', 'plex'].includes(r.protein_state)) excluded++; continue }
+    if (!Number.isFinite(r.amount)) continue
+    const p = { x: transform(x), y: r.amount, label: r.name || r.line, lineage: r.lineage || 'unmapped' }
     ;(highlight && p.lineage === highlight ? hi : base).push(p)
   }
   const xs = [...base, ...hi].map((p) => p.x)

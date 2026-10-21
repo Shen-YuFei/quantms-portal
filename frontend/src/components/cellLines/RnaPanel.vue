@@ -36,28 +36,29 @@
     </div>
     <div v-if="source === 'depmap' && a?.flat_rna" class="cl-empty" data-test="rna-flat">RNA barely varies across lines, so the scatter is not shown.</div>
     <template v-else>
-      <div v-if="!scatter.n" class="cl-empty">No detected line has both an RNA value and a level 4 value.</div>
+      <div v-if="!scatter.n" class="cl-empty">No detected line has both an RNA value and a protein amount.</div>
       <ScatterChart v-else :data="scatter.data" :options="options" :height="340" />
       <p class="cl-caption" data-test="rna-scatter-note">
         {{ scatter.n }} detected lines<template v-if="highlight"> ({{ scatter.highlighted }} {{ highlight }})</template>.
-        <template v-if="scatter.excluded">{{ scatter.excluded }} measured but non-detected lines (level 4 = 0) are left out.</template>
+        <template v-if="scatter.excluded">{{ scatter.excluded }} line{{ scatter.excluded === 1 ? '' : 's' }} where the protein was not detected {{ scatter.excluded === 1 ? 'is' : 'are' }} left out (see "Detection vs RNA" above).</template>
       </p>
     </template>
 
     <template v-if="a">
       <h4 class="cl-subhead">Context</h4>
       <div class="cl-rna-context">
-        <div class="cl-rho-hist" data-test="rho-hist">
-          <div class="cl-rho-bars" role="img" :aria-label="`Atlas-wide per-gene Spearman; this gene ${fmt(a.rna_protein_spearman)}`">
-            <span v-for="b in bars" :key="b.lo" class="cl-rho-bar" :class="{ mine: b.mine }"
+        <div v-for="h in hists" :key="h.id" class="cl-rho-hist" :data-test="`rna-hist-${h.id}`">
+          <div class="cl-fact-label">{{ h.label }}</div>
+          <div class="cl-rho-bars" role="img" :aria-label="`${h.label} across the atlas; this gene ${fmt(h.value)}`">
+            <span v-for="b in h.bars" :key="b.lo" class="cl-rho-bar" :class="{ mine: b.mine }"
                   :style="{ left: `${b.left}%`, width: `${b.width}%`, height: `${b.height}%` }" :title="`${fmt(b.lo)} to ${fmt(b.lo + bin)}: ${b.n} genes`"></span>
-            <span v-if="Number.isFinite(a.rna_protein_spearman)" class="cl-rho-mark" :style="{ left: `${rhoPos(a.rna_protein_spearman)}%` }"></span>
+            <span v-if="Number.isFinite(h.value)" class="cl-rho-mark" :style="{ left: `${h.pos(h.value)}%` }"></span>
           </div>
-          <div class="cl-rho-ticks"><span>−1</span><span>0</span><span>1</span></div>
+          <div class="cl-rho-ticks"><span>{{ h.lo }}</span><span>{{ h.mid }}</span><span>{{ h.hi }}</span></div>
           <div class="cl-fact-sub">
-            <template v-if="Number.isFinite(a.rna_protein_spearman)">{{ gene }} ρ = {{ fmt(a.rna_protein_spearman) }} over {{ a.rna_protein_lines ?? '—' }} lines, {{ pct(a.rho_percentile) }} percentile</template>
-            <template v-else>No ρ for this gene (needs ≥20 lines with both values)</template>
-            <template v-if="atlas?.median != null"> · atlas median {{ fmt(atlas.median) }} over {{ atlas.genes }} genes</template>
+            <template v-if="Number.isFinite(h.value)">{{ gene }} {{ fmt(h.value) }} over {{ h.lines ?? '—' }} lines, {{ pct(h.percentile) }} percentile</template>
+            <template v-else>{{ h.missing }}</template>
+            <template v-if="h.median != null"> · atlas median {{ fmt(h.median) }} over {{ h.genes }} genes</template>
           </div>
         </div>
         <div class="cl-facts">
@@ -72,7 +73,9 @@
     </template>
 
     <p class="cl-caption">
-      Across-line, within-gene Spearman (not the across-gene correlation often quoted, ~0.4–0.8; Edfors et al. 2016).
+      Detection AUC: how well RNA separates lines where the protein is detected from lines where it is not (0.5 = chance,
+      1 = perfect; only lines with a per-line detection call). Amount ρ: Spearman, across detected lines, between RNA and the protein amount
+      (log2 difference from the study average). Both are within-gene, across lines.
       RNA is an external reference ({{ source === 'depmap' ? depmapLabel : hpaLabel }}) and never used to compute protein values.
     </p>
   </div>
@@ -82,7 +85,7 @@
 import { ref, computed, watch } from 'vue'
 import ScatterChart from '../ScatterChart.vue'
 import {
-  L4_AXIS, BOX_MIN_LINES, fmt, pct, presenceState, rnaByDetection, rnaVerdict, detectedScatter,
+  BOX_MIN_LINES, fmt, pct, signed, presenceState, rnaByDetection, rnaVerdict, detectedScatter,
 } from '../../cellLines.js'
 
 const props = defineProps({
@@ -142,24 +145,37 @@ watch(source, () => { if (!lineages.value.includes(highlight.value)) highlight.v
 const options = computed(() => ({
   plugins: {
     legend: { display: !!highlight.value, position: 'bottom' },
-    tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label} (${ctx.raw.lineage}): RNA ${fmt(ctx.raw.x)}, rank ${fmt(ctx.raw.y)}` } },
+    tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label} (${ctx.raw.lineage}): RNA ${fmt(ctx.raw.x)}, amount ${signed(ctx.raw.y)} log2` } },
   },
   scales: {
     x: { min: scatter.value.xMin, max: scatter.value.xMax, ticks: { includeBounds: false },
       title: { display: true, text: source.value === 'depmap' ? 'DepMap RNA, log2(TPM+1)' : 'HPA RNA, log2(nTPM+1)' } },
-    y: { min: -0.04, max: 1.04, ticks: { includeBounds: false }, title: { display: true, text: L4_AXIS } },
+    y: { title: { display: true, text: 'Difference from study average (log2)' } },
   },
 }))
 
 const bin = computed(() => atlas.value?.bin || 0.05)
-const rhoPos = (v) => ((Math.min(1, Math.max(-1, v)) + 1) / 2) * 100
-const bars = computed(() => {
-  const hist = atlas.value?.hist || []
+const histogram = (dist, value, lo, hi) => {
+  const hist = dist?.hist || []
   const top = Math.max(1, ...hist.map((h) => h[1]))
-  const rho = a.value?.rna_protein_spearman
-  return hist.map(([lo, n]) => ({
-    lo, n, left: rhoPos(lo), width: (bin.value / 2) * 100, height: Math.max(2, (n / top) * 100),
-    mine: Number.isFinite(rho) && rho >= lo && rho < lo + bin.value + 1e-9,
-  }))
+  const pos = (v) => ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * 100
+  return {
+    pos, median: dist?.median ?? null, genes: dist?.genes ?? null,
+    bars: hist.map(([b, n]) => ({
+      lo: b, n, left: pos(b), width: (bin.value / (hi - lo)) * 100, height: Math.max(2, (n / top) * 100),
+      mine: Number.isFinite(value) && value >= b && value < b + bin.value + 1e-9,
+    })),
+  }
+}
+const hists = computed(() => {
+  const ag = a.value || {}
+  return [
+    { id: 'auc', label: 'RNA predicts detection (AUC)', value: ag.rna_detect_auc, lines: (ag.rna_detect_lines ?? 0) + (ag.rna_undetected_lines ?? 0),
+      percentile: ag.auc_percentile, lo: 0, mid: 0.5, hi: 1, missing: 'No AUC (needs ≥10 detected and ≥10 not-detected lines)',
+      ...histogram(atlas.value?.auc, ag.rna_detect_auc, 0, 1) },
+    { id: 'rho', label: 'Amount follows RNA (ρ)', value: ag.rna_amount_rho, lines: ag.rna_amount_lines,
+      percentile: ag.rho_percentile, lo: '−1', mid: 0, hi: 1, missing: 'No ρ (needs ≥20 detected lines with RNA)',
+      ...histogram(atlas.value?.rho, ag.rna_amount_rho, -1, 1) },
+  ]
 })
 </script>
