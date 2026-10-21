@@ -81,7 +81,7 @@
           </div>
           <p v-if="weakReliability" class="cl-caption cl-warn" data-test="box-reliability">Differences between cell lines for {{ gene }} reproduce only weakly between labs<template v-if="s.reliability_class && s.icc != null"> (ICC {{ fmt(s.icc) }})</template>: read groups, not single cell lines.</p>
           <GroupSummary :gene="gene" :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
-          <p class="cl-caption" data-test="box-caption">Rows sorted by how much higher a {{ kindLabel }}'s cell lines are than the other cell lines of the same studies. Amount strip: box = middle half, line = median, dots = cell lines (click to open).<template v-if="noCallLines"> {{ noCallLines }} cell line{{ noCallLines === 1 ? '' : 's' }} measured only in pooled samples {{ noCallLines === 1 ? 'is' : 'are' }} not shown.</template></p>
+          <p class="cl-caption" data-test="box-caption">Rows sorted by how much higher a {{ kindLabel }}'s cell lines are than the other cell lines of the same studies. Amount strip: box = middle half, line = median, dots = cell lines (click to open).<template v-if="noCallLines">&#32;{{ noCallLines }} cell line{{ noCallLines === 1 ? '' : 's' }} measured only in pooled samples {{ noCallLines === 1 ? 'is' : 'are' }} not shown.</template></p>
         </section>
 
         <section class="cl-card">
