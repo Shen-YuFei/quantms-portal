@@ -89,6 +89,17 @@ const table = (params) => ({
   ],
 })
 
+const allLines = {
+  lines: [
+    { line: 'CVCL_0031', name: 'MCF7', depmap_id: 'ACH-000019', lineage: 'Breast', primary_disease: 'Invasive Breast Carcinoma', subtype: null, sex: 'Female',
+      non_cancerous: false, problematic: null, studies: ['CCLE', 'ProCan', 'S3'], acq: ['DIA', 'TMT'], n_studies: 3, samples: 12, flagged_samples: 1, sex_flag: false, identity_verdict: null },
+    { line: 'CVCL_0598', name: 'MCF-10A', depmap_id: 'ACH-001357', lineage: 'Breast', primary_disease: 'Non-Cancerous', subtype: null, sex: 'Female',
+      non_cancerous: true, problematic: null, studies: ['S3'], acq: ['DIA'], n_studies: 1, samples: 6, flagged_samples: 0, sex_flag: false, identity_verdict: null },
+    { line: 'CVCL_0023', name: 'A549', depmap_id: 'ACH-000681', lineage: 'Lung', primary_disease: 'Non-Small Cell Lung Cancer', subtype: null, sex: 'Male',
+      non_cancerous: false, problematic: null, studies: ['CCLE', 'ProCan'], acq: ['DIA', 'TMT'], n_studies: 2, samples: 9, flagged_samples: 0, sex_flag: false, identity_verdict: null },
+  ],
+}
+
 function respond(overrides = {}) {
   apiGet.mockImplementation(async (base, path, params) => {
     if (path in overrides) {
@@ -98,6 +109,7 @@ function respond(overrides = {}) {
     }
     if (path === '/manifest') return manifest
     if (path === '/overview') return overview
+    if (path === '/lines/all') return allLines
     if (path === '/table') return table(params)
     if (path === '/groups') return groups
     if (path === '/genes/VIM') return vim
@@ -152,6 +164,34 @@ describe('CellLines view', () => {
     await rows[1].find('.cl-pt-gene').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'protein', gene: 'VIM' })
+  })
+
+  it('lists every cell line on the Cell line tab, with filters, and opens one', async () => {
+    respond()
+    const { w, router } = await mountAt('/apps/cell-lines?tab=line')
+    const rows = () => w.findAll('[data-test="line-row"]')
+    expect(rows().map((r) => r.find('.cl-pt-gene').text())).toEqual(['MCF7', 'A549', 'MCF-10A'])  // most studies first
+    expect(rows()[0].text()).toContain('1 QC-flagged')
+    expect(rows()[2].text()).toContain('non-cancerous')
+    await w.find('[data-test="lines-lineage"]').setValue('Lung')
+    expect(rows().map((r) => r.find('.cl-pt-gene').text())).toEqual(['A549'])
+    expect(w.find('[data-test="lines-count"]').text()).toBe('1 of 3 cell lines')
+    await rows()[0].find('.cl-pt-gene').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', line: 'CVCL_0023' })
+  })
+
+  it('picks cell lines to compare by ticking them in the list', async () => {
+    respond()
+    const { w, router } = await mountAt('/apps/cell-lines?tab=compare')
+    expect(w.find('[data-test="compare-browse"]').attributes('open')).toBeDefined()
+    const box = (name) => w.findAll('[data-test="line-row"]').find((r) => r.text().includes(name)).find('input[type="checkbox"]')
+    await box('MCF7').setValue(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query.lines).toBe('CVCL_0031')
+    await box('A549').setValue(true)
+    await flushPromises()
+    expect(String(router.currentRoute.value.query.lines)).toBe('CVCL_0031,CVCL_0023')
   })
 
   it('profiles the gene within one study, with not-detected lines apart, and groups the values table by study', async () => {
@@ -359,7 +399,8 @@ describe('CellLines view', () => {
     expect(tables[0].find('tbody tr').findAll('td').map((td) => td.text())).toEqual(['VIM', '+0.42', '2', '11'])
     expect(tables[1].find('tbody tr').findAll('td').map((td) => td.text())).toEqual(['EPCAM', '−0.30', '1', '9'])
     expect(w.find('[data-test="line-distinct-caption"]').text()).toBe('Compared with the rest of its lineage in the same studies (A49).')
-    expect(w.text()).not.toMatch(/TMT|Acquisition/)
+    const browse = w.find('[data-test="line-browse"]').text()
+    expect(w.text().replace(browse, '')).not.toMatch(/TMT|Acquisition/)
   })
 
   it('requests a line comparison from the URL selection', async () => {

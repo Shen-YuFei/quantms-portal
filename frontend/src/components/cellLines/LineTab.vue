@@ -1,6 +1,12 @@
 <template>
   <div>
-    <div v-if="!line" class="cl-notice">Search for a cell line by name, Cellosaurus accession (CVCL_…) or DepMap ID.</div>
+    <section v-if="!line" class="cl-card" data-test="lines-browser">
+      <div class="cl-card-head">
+        <h3>All cell lines</h3>
+        <span class="cl-muted">Search above, or filter and sort the list; click a name to open its proteome.</span>
+      </div>
+      <LineBrowser @open="(l) => $emit('select-line', l)" />
+    </section>
     <StatusBlock v-else :loading="req.loading.value" :error="req.error.value" :what="`Cell line ${line}`"
                  :loading-text="`Loading ${line}…`" :retry="load" />
 
@@ -95,6 +101,10 @@
         </div>
       </section>
     </template>
+    <details v-if="line && d" class="cl-card cl-browse" data-test="line-browse">
+      <summary>Browse all cell lines<span class="cl-muted"> · starts filtered to {{ m.lineage }}</span></summary>
+      <LineBrowser :key="line" :initial-lineage="m.lineage || ''" @open="(l) => $emit('select-line', l)" />
+    </details>
   </div>
 </template>
 
@@ -103,11 +113,12 @@ import { computed, watch } from 'vue'
 import { getLine, fmt, signed, accessionUrl } from '../../cellLines.js'
 import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
+import LineBrowser from './LineBrowser.vue'
 
 const props = defineProps({
   line: { type: String, default: '' },
 })
-defineEmits(['select-gene'])
+defineEmits(['select-gene', 'select-line'])
 
 const req = useRequest(getLine)
 const d = computed(() => req.data.value)

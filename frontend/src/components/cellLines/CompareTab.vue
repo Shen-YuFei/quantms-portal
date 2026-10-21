@@ -19,8 +19,12 @@
             </span>
           </div>
         </div>
-        <p v-if="lines.length < 2" class="cl-muted">Pick 2 to {{ MAX_COMPARE_LINES }} lines to compare.</p>
+        <p v-if="lines.length < 2" class="cl-muted">Pick 2 to {{ MAX_COMPARE_LINES }} lines to compare: type a name, or tick them in the list below.</p>
       </section>
+      <details class="cl-card cl-browse" :open="lines.length < 2" data-test="compare-browse">
+        <summary>Pick cell lines from the list<span class="cl-muted"> · filter by lineage, cancer type or acquisition</span></summary>
+        <LineBrowser selectable :selected="lines" :max="MAX_COMPARE_LINES" @toggle="toggleLine" @open="(l) => $emit('select-line', l)" />
+      </details>
       <StatusBlock :loading="req.loading.value" :error="req.error.value" what="This comparison" :retry="load" />
       <section v-if="lineResult" class="cl-card">
         <div class="cl-card-head"><h3>Genes with a level 4 value in every selected line, by spread</h3></div>
@@ -122,6 +126,7 @@ import ScatterChart from '../ScatterChart.vue'
 import AtlasPicker from './AtlasPicker.vue'
 import StatusBlock from './StatusBlock.vue'
 import { useRequest } from './useRequest.js'
+import LineBrowser from './LineBrowser.vue'
 import {
   MAX_COMPARE_LINES, GROUP_KINDS, L4_AXIS, compare, compareParams, fmt, pct, heatColor,
 } from '../../cellLines.js'
@@ -134,7 +139,7 @@ const props = defineProps({
   b: { type: String, default: '' },
   groups: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['update', 'select-gene'])
+const emit = defineEmits(['update', 'select-gene', 'select-line'])
 
 const req = useRequest(compare)
 const selection = computed(() => ({ mode: props.mode, lines: props.lines, group: props.group, a: props.a, b: props.b }))
@@ -193,6 +198,7 @@ function addLine(line, item) {
   if (!props.lines.includes(line)) update({ lines: [...props.lines, line].slice(0, MAX_COMPARE_LINES) })
 }
 function removeLine(line) { update({ lines: props.lines.filter((l) => l !== line) }) }
+function toggleLine(line, row) { if (props.lines.includes(line)) removeLine(line); else addLine(line, row) }
 
 function load() {
   if (compareParams(selection.value)) req.run(selection.value)
