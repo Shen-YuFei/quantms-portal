@@ -103,16 +103,16 @@ describe('summaries', () => {
 describe('group dot plot', () => {
   const m = (n, p, h = 0, plex = 0) => ({ n_studies_measured: n, n_studies_present: p, n_studies_present_high: h, n_studies_plex_identified: plex })
   const lines = [
-    { line: 'L1', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.9, ...m(2, 2, 2) },
-    { line: 'L2', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.6, ...m(1, 1) },
+    { line: 'L1', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.9, l3_mean: 1.5, ...m(2, 2, 2) },
+    { line: 'L2', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.6, l3_mean: 0.5, ...m(1, 1) },
     { line: 'L3', lineage: 'Lung', primary_disease: 'SCLC', l4_mean: 0, ...m(1, 0, 0, 1) },
     { line: 'L4', lineage: 'Lung', primary_disease: 'SCLC', l4_mean: 0, ...m(1, 0) },
     { line: 'L5', lineage: 'Lung', primary_disease: 'SCLC', l4_mean: null, ...m(0, 0) },
-    { line: 'S1', lineage: 'Skin', primary_disease: 'Melanoma', l4_mean: 0.8, ...m(1, 1) },
-    { line: 'S2', lineage: 'Skin', primary_disease: 'Melanoma', l4_mean: 0.7, ...m(1, 1) },
-    { line: 'B1', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.95, ...m(1, 1) },
-    { line: 'B2', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.85, ...m(1, 1) },
-    { line: 'B3', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.75, ...m(1, 0) },
+    { line: 'S1', lineage: 'Skin', primary_disease: 'Melanoma', l4_mean: 0.8, l3_mean: 1, ...m(1, 1) },
+    { line: 'S2', lineage: 'Skin', primary_disease: 'Melanoma', l4_mean: 0.7, l3_mean: 0.8, ...m(1, 1) },
+    { line: 'B1', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.95, l3_mean: 2, ...m(1, 1) },
+    { line: 'B2', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.85, l3_mean: 1.5, ...m(1, 1) },
+    { line: 'B3', lineage: 'Breast', primary_disease: 'IDC', l4_mean: 0.75, l3_mean: -0.5, ...m(1, 0) },
   ]
 
   const groups = [
@@ -147,15 +147,16 @@ describe('group dot plot', () => {
     expect(tukeyBox([])).toBeNull()
   })
 
-  it('builds box groups in dot-plot order, leaving out lines without a presence call', () => {
+  it('builds box groups in dot-plot order: values as points, measured-not-detected apart, no-call lines left out', () => {
     const boxes = groupBoxes(lines, groups, 'lineage')
     expect(boxes.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true]])
     const lung = boxes.find((g) => g.value === 'Lung')
-    expect(lung.points.map((p) => [p.line, p.detected])).toEqual([['L1', true], ['L2', true], ['L4', false]])
+    expect(lung.points.map((p) => [p.line, p.value, p.detected])).toEqual([['L1', 1.5, true], ['L2', 0.5, true]])
+    expect(lung.absent.map((p) => p.line)).toEqual(['L4'])
     expect(lung.nocall).toBe(1)
-    expect(lung.median).toBe(0.6)
+    expect(lung.median).toBe(1)
     expect(lung.box).toBeNull()
-    expect(boxes.flatMap((g) => g.points).some((p) => p.line === 'L5' || p.line === 'L3')).toBe(false)
+    expect(boxes.flatMap((g) => [...g.points, ...g.absent]).some((p) => p.line === 'L5' || p.line === 'L3')).toBe(false)
   })
 
   it('maps the by= URL param to a group kind and back', () => {

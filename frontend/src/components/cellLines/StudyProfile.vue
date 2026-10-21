@@ -66,7 +66,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { studyProfile, profileAxis, methodLabel, fmt, signed } from '../../cellLines.js'
+import { studyProfile, profileAxis, methodLabel, foldText, signed } from '../../cellLines.js'
 
 const props = defineProps({
   gene: { type: String, default: '' },
@@ -105,8 +105,7 @@ const showTip = (x, yy, text) => {
   const half = Math.min(150, W.value / 2)
   tip.value = { x: Math.min(W.value - half, Math.max(half, x)), y: yy, below: yy < 80, text }
 }
-const times = (v) => (v >= 0 ? `${fmt(2 ** v, 1)}× the study average` : `${fmt(2 ** -v, 1)}× below the study average`)
-const pointTip = (p) => `${p.name} · ${signed(p.value)} log2 · ${times(p.value)}${p.detected ? '' : ' · no detection'}`
+const pointTip = (p) => `${p.name} · ${signed(p.value)} log2 · ${foldText(p.value, 'the study average')}${p.detected ? '' : ' · no detection'}`
 const groupTip = (g) => [
   `${g.value} · ${g.points.length} line${g.points.length === 1 ? '' : 's'} with a value`,
   g.median != null ? `median ${signed(g.median)} log2` : '',

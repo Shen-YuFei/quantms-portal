@@ -60,8 +60,8 @@
           <dd>The protein was identified in that cell line. TMT studies identify proteins per plex (a pool of 10–16 samples), not per cell line, so they never count as a detection in one cell line.</dd>
           <dt>Profile within each study</dt>
           <dd>How the protein varies across the cell lines of one study, as log2 difference from that study's average. DIA and label-free DDA use directLFQ; TMT uses piBAQ with IRS on the reference channel. Each study has its own scale.</dd>
-          <dt>Cell lines ranked within their studies</dt>
-          <dd>How much of the protein a cell line has compared with the other cell lines in the same study: 1 = the most, 0 = the least or not detected, averaged over the cell line's studies. Ranks have no units, so this is the only view that combines studies.</dd>
+          <dt>Amount in each cell line, across studies</dt>
+          <dd>How much of the protein a cell line has compared with the average cell line of its studies (log2; 0 = average), averaged over the cell line's studies. Each study's average is removed first, so studies can be combined; differences between labs remain, so trust it most for proteins marked reproducible.</dd>
           <dt>Abundance in sample</dt>
           <dd>log2 piBAQ: how abundant the protein is compared with other proteins in the same sample. Its scale differs between studies, so compare it only within a study.</dd>
         </dl>
@@ -87,11 +87,12 @@
 
       <section class="cl-card">
         <div class="cl-card-head">
-          <h3>Cell lines ranked within their studies</h3>
+          <h3>Amount in each cell line, across studies</h3>
           <GroupToggle v-model="kind" />
         </div>
         <GroupBoxPlot :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
-        <p class="cl-caption" data-test="box-caption">Each dot is one cell line. Its height shows how much {{ gene }} it has compared with the other cell lines measured in the same study: 1 = the most, 0.5 = in the middle, 0 = the least or not detected. A cell line measured in several studies is placed at its average. Filled dots: {{ gene }} detected in that cell line. Each box shows the spread of one {{ kindLabel }}. Cell lines measured only in pooled samples are left out, because pooling cannot show whether the protein is present in one cell line. <template v-if="noCallLines">{{ noCallLines }} such cell line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or dot for details; click a dot to open the cell line.</p>
+        <p v-if="weakReliability" class="cl-caption cl-warn" data-test="box-reliability">Differences between cell lines for {{ gene }} reproduce only weakly between labs<template v-if="s.icc != null"> (ICC {{ fmt(s.icc) }})</template>: don't read much into single cell lines, and look at groups instead.</p>
+        <p class="cl-caption" data-test="box-caption">Each dot is one cell line. Its height is how much {{ gene }} it has compared with the average cell line of its studies, on a log2 scale: 0 = average, +1 = twice as much, −1 = half. A cell line measured in several studies is placed at its average. Cell lines where {{ gene }} was measured but not detected are at the bottom (n.d.). Filled dots: {{ gene }} detected in that cell line. Each box shows the spread of one {{ kindLabel }}. Cell lines measured only in pooled samples are left out, because pooling cannot show whether the protein is present in one cell line. <template v-if="noCallLines">{{ noCallLines }} such cell line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or dot for details; click a dot to open the cell line.</p>
       </section>
 
       <section class="cl-card">
@@ -192,6 +193,7 @@ const kind = computed({
 const d = computed(() => detail.data.value)
 const noCallLines = computed(() => (d.value?.lines || []).filter((l) => presenceState(l) === 'nocall').length)
 const s = computed(() => d.value?.gene || {})
+const weakReliability = computed(() => !!d.value && s.value.reliability_class !== 'reproducible')
 const kindLabel = computed(() => GROUP_KINDS.find((k) => k.id === kind.value).label.toLowerCase())
 const linkList = computed(() => Object.keys(LINK_LABELS)
   .filter((k) => d.value?.links?.[k])
