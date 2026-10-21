@@ -40,9 +40,9 @@ const coexp = {
   display_min_z: 4.0,
   complexes: [{ complex_ac: 'CPX-1', complex_name: 'Intermediate filament' }],
   partners: [
-    { partner: 'DES', z: 7.2, rank: 1, studies: 5, distinct_lines: 300, validated: true, reliability_class: 'reliable', shared_complexes: ['Intermediate filament'] },
-    { partner: 'LMNA', z: 6.1, rank: 2, studies: 5, distinct_lines: 280, validated: true, reliability_class: 'reliable', shared_complexes: [] },
-    { partner: 'NES', z: 4.3, rank: 3, studies: 4, distinct_lines: 200, validated: false, reliability_class: 'moderate', shared_complexes: [] },
+    { partner: 'DES', z: 7.2, rank: 1, studies: 5, distinct_lines: 300, strong: true, reliability_class: 'reliable', shared_complexes: ['Intermediate filament'] },
+    { partner: 'LMNA', z: 6.1, rank: 2, studies: 5, distinct_lines: 280, strong: true, reliability_class: 'reliable', shared_complexes: [] },
+    { partner: 'NES', z: 4.3, rank: 3, studies: 4, distinct_lines: 200, strong: false, reliability_class: 'moderate', shared_complexes: [] },
   ],
 }
 const rnaBody = {
@@ -456,28 +456,28 @@ describe('CellLines view', () => {
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'compare', mode: 'groups', a: 'Lung' })
   })
 
-  it('renders the co-expression tab with validated and ranked edges', async () => {
+  it('renders the co-expression tab with strong and ranked edges', async () => {
     respond()
     const { w } = await mountAt('/apps/cell-lines?tab=coexpression&gene=VIM')
     expect(w.find('svg.cl-network').exists()).toBe(true)
     expect(w.text()).toContain('|Z| >= 5 (A44)')
     expect(w.find('[data-test="own-complexes"]').text()).toBe('Complexes: Intermediate filament')
-    expect(w.findAll('[data-edge]').map((e) => e.attributes('data-edge'))).toEqual(['validated', 'validated', 'ranked'])
+    expect(w.findAll('[data-edge]').map((e) => e.attributes('data-edge'))).toEqual(['strong', 'strong', 'ranked'])
     expect(w.findAll('svg.cl-network line.cl-edge-ranked')).toHaveLength(1)
-    expect(w.findAll('[data-test="edge-kind"]').map((c) => c.text())).toEqual(['validated (A44)', 'validated (A44)', 'ranked neighbour'])
+    expect(w.findAll('[data-test="edge-kind"]').map((c) => c.text())).toEqual(['strong, |Z| ≥ 5', 'strong, |Z| ≥ 5', 'ranked neighbour'])
     const badge = w.find('[data-test="same-complex"]')
     expect(badge.text()).toBe('same complex')
     expect(badge.attributes('title')).toBe('Intermediate filament')
-    expect(w.find('[data-test="coexp-caption"]').text()).toContain('Partners ranked by |Z| on the A44 recipe, shown down to |Z| ≥ 4 (about one chance partner per gene expected at that level). Only |Z| ≥ 5 is validated; |Z| 4–5 are ranked neighbours. Complex Portal is used for annotation only.')
+    expect(w.find('[data-test="coexp-caption"]').text()).toContain('Partners ranked by |Z| on the A44 recipe, shown down to |Z| ≥ 4 (about one chance partner per gene expected at that level). Only |Z| ≥ 5 passes the calibrated A44 threshold (strong); |Z| 4–5 are ranked neighbours. Strong is a statistical cut, not experimental validation.')
   })
 
-  it('filters partners beyond shared complexes or validated only', async () => {
+  it('filters partners beyond shared complexes or strong only', async () => {
     respond()
     const { w } = await mountAt('/apps/cell-lines?tab=coexpression&gene=VIM')
     const partnersShown = () => w.findAll('[data-test="partner-row"]').map((r) => r.find('button').text())
     await w.find('[data-filter="beyond"]').trigger('click')
     expect(partnersShown()).toEqual(['LMNA', 'NES'])
-    await w.find('[data-filter="validated"]').trigger('click')
+    await w.find('[data-filter="strong"]').trigger('click')
     expect(partnersShown()).toEqual(['DES', 'LMNA'])
     expect(w.findAll('[data-edge]')).toHaveLength(2)
     await w.find('[data-filter="all"]').trigger('click')
@@ -506,7 +506,7 @@ describe('CellLines view', () => {
 
   it('shows negative partners in their own colour (PSMB9)', async () => {
     const imm = ['20S immunoproteasome complex']
-    const p = (partner, z, validated, shared = []) => ({ partner, z, validated, studies: 5, distinct_lines: 900, shared_complexes: shared })
+    const p = (partner, z, strong, shared = []) => ({ partner, z, strong, studies: 5, distinct_lines: 900, shared_complexes: shared })
     respond({
       '/genes/PSMB9/coexpression': {
         gene: 'PSMB9', threshold: '|Z| >= 5 (A44)', display_min_z: 4.0, complexes: [{ complex_ac: 'CPX-9003', complex_name: imm[0] }],
@@ -522,7 +522,7 @@ describe('CellLines view', () => {
     expect(w.findAll('[data-test="same-complex"]')).toHaveLength(2)
     await w.find('[data-filter="beyond"]').trigger('click')
     expect(w.findAll('[data-test="partner-row"]')).toHaveLength(10)
-    await w.find('[data-filter="validated"]').trigger('click')
+    await w.find('[data-filter="strong"]').trigger('click')
     expect(w.findAll('[data-test="partner-row"]')).toHaveLength(8)
   })
 
@@ -550,6 +550,23 @@ describe('CellLines view', () => {
     ])
     await w.findAll('[data-test="datasets-table"] th')[0].trigger('click')
     expect(w.findAll('[data-test="datasets-table"] tbody tr')[0].find('td').text()).toBe('CCLE')
+  })
+
+  it('explains the processing rules on the methods tab with thresholds from the manifest', async () => {
+    respond({ '/manifest': { ...manifest, rules: { spec_min_lineage_lines: 12, spec_min_studies: 2, spec_min_detected: 3,
+      coexpression_min_abs_z: 5, serum_genes: ['HBB'] }, excluded_studies: { studies: ['PXD000269'] } } })
+    const { w } = await mountAt('/apps/cell-lines?tab=methods')
+    const text = w.find('[data-test="methods"]').text()
+    expect(text).toContain('the lineage has at least 12 cell lines')
+    expect(text).toContain('Strong is a statistical cut, not experimental validation.')
+    expect(text).toContain('PXD000269')
+  })
+
+  it('says why a specificity call is not shown on the protein page', async () => {
+    respond({ '/genes/VIM': { ...vim, gene: { ...vim.gene, spec_cat3: 'insufficient', spec_top3: null, spec_cat3_unguarded: 'lineage enriched',
+      spec_dropped: ['Lung: 3 lines in the lineage (< 10)'], spec_robust: false } } })
+    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
+    expect(w.find('[data-test="spec-dropped"]').text()).toContain('Not shown: Lung: 3 lines in the lineage (< 10) (unguarded call: lineage enriched)')
   })
 })
 

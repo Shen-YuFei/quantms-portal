@@ -34,7 +34,8 @@
           <span class="cl-gs-name" :title="g.value">{{ g.value }} <span class="cl-muted">{{ g.n_lines }}</span></span>
           <span class="cl-gs-det" data-test="gs-det">
             <span class="cl-gs-bubble" :style="bubble(g)"></span>
-            <template v-if="g.n_called">{{ g.n_detected }} of {{ g.n_called }}</template>
+            <template v-if="g.n_called">{{ g.n_detected }} of {{ g.n_called }}<span v-if="g.n_weak" class="cl-muted" title="identified with 1 peptide only"> · {{ g.n_weak }} weak</span></template>
+            <span v-else-if="g.n_plex_only" class="cl-muted" title="Only TMT studies measured these lines; TMT identifies a protein per plex, not per cell line">TMT only · {{ g.n_plex_only }} lines</span>
             <span v-else class="cl-muted">no per-line call</span>
           </span>
           <span class="cl-gs-enr">

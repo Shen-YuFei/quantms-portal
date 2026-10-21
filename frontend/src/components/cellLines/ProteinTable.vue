@@ -66,8 +66,8 @@
             </td>
             <td>
               <div class="cl-pt-spec">
-                <span class="cl-pill cl-pill-outline" :style="r.specStyle">{{ r.spec_cat3 }}</span>
-                <span v-if="r.spec_robust" class="cl-pt-tag" title="The specificity call agrees between the two views">robust</span>
+                <span class="cl-pill cl-pill-outline" :style="r.specStyle" :title="(r.spec_dropped || []).length ? `Not shown: ${r.spec_dropped.join('; ')}` : ''">{{ r.spec_cat3 }}</span>
+                <span v-if="r.spec_robust" class="cl-pt-tag" title="Both views agree and at least 2 studies give the same top lineage">robust</span>
                 <span v-if="r.spec_lab_reproducible" class="cl-pt-tag cl-pt-tag-labs" title="Reproduced by more than one lab">2+ labs</span>
               </div>
               <div class="cl-pt-lineages">
@@ -77,6 +77,7 @@
             <td v-if="filters.lineage" class="cl-pt-lin">
               <span class="cl-pt-heat" :style="r.linStyle">{{ Number.isFinite(r.lineage_enrichment) ? signed(r.lineage_enrichment) : 'no comparison' }}</span>
               <div v-if="r.lineage_called" class="cl-muted cl-pt-sub">detected in {{ r.lineage_detected }} of {{ r.lineage_called }} lines</div>
+              <div v-else-if="r.lineage_plex_only" class="cl-muted cl-pt-sub" title="TMT identifies a protein per plex, not per cell line">TMT only · {{ r.lineage_plex_only }} lines</div>
             </td>
             <td>
               <div v-if="Number.isFinite(r.rna_detect_auc) || Number.isFinite(r.rna_amount_rho)" class="cl-pt-rna">

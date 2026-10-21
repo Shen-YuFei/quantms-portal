@@ -10,6 +10,7 @@ export const TABS = [
   { id: 'compare', label: 'Compare' },
   { id: 'coexpression', label: 'Co-expression' },
   { id: 'datasets', label: 'Datasets' },
+  { id: 'methods', label: 'Methods' },
 ]
 export const GROUP_KINDS = [
   { id: 'lineage', label: 'Lineage' },
@@ -141,6 +142,7 @@ export function groupDots(lines, groups, kind = 'lineage') {
     const enrichment = Number.isFinite(g.enrichment) ? g.enrichment : null
     return {
       value: g.value, rows, enrichment, n_called: g.n_called || 0, n_detected: g.n_detected || 0,
+      n_weak: g.n_weak || 0, n_plex_only: g.n_plex_only || 0,
       n_lines: g.n_lines ?? rows.length, n_studies: g.n_studies ?? null,
       frac: g.n_called > 0 ? (g.n_detected || 0) / g.n_called : null,
       box: l4.length >= BOX_MIN_LINES ? boxStats(l4) : null,
@@ -403,15 +405,18 @@ export function detectedScatter(rows, xKey, { transform = (x) => x, isDetected =
 export const COEXP_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'beyond', label: 'Beyond shared complexes' },
-  { id: 'validated', label: 'Validated only' },
+  { id: 'strong', label: 'Strong only (|Z| ≥ 5)' },
 ]
 
 export const noPartnersText = (gene, minZ = 4) =>
   `No partners at |Z| ≥ ${minZ} for ${gene}: its co-variation across lines is not distinguishable from chance.`
 
+/** A44 edge at |Z| ≥ 5; reads the older `validated` field too. */
+export const isStrong = (p) => !!(p?.strong ?? p?.validated)
+
 export function filterPartners(partners, mode = 'all') {
   const rows = partners || []
-  if (mode === 'validated') return rows.filter((p) => p.validated)
+  if (mode === 'strong') return rows.filter(isStrong)
   if (mode === 'beyond') return rows.filter((p) => !(p.shared_complexes || []).length)
   return rows
 }

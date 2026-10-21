@@ -12,7 +12,7 @@
 
     <section v-if="(!gene || (data && !partners.length)) && hubs.length" class="cl-card" data-test="coexp-hubs">
       <div class="cl-card-head">
-        <h3>Proteins with the most validated partners</h3>
+        <h3>Proteins with the most strong partners</h3>
         <span class="cl-muted">a starting point for exploring the network</span>
       </div>
       <div class="cl-hubs">
@@ -38,7 +38,7 @@
             <button v-for="f in COEXP_FILTERS" :key="f.id" type="button" :class="{ active: mode === f.id }" :aria-pressed="mode === f.id"
                     :data-filter="f.id" @click="mode = f.id">{{ f.label }}</button>
           </div>
-          <span class="cl-muted">{{ validatedCount }} validated · {{ partners.length - validatedCount }} ranked</span>
+          <span class="cl-muted">{{ strongCount }} strong (|Z| ≥ 5) · {{ partners.length - strongCount }} ranked</span>
         </div>
         <section class="cl-card">
           <div class="cl-card-head">
@@ -50,8 +50,8 @@
               </p>
             </div>
             <span class="cl-legend">
-              <span class="cl-legend-item"><svg class="cl-edge-key" viewBox="0 0 22 6"><line x1="0" y1="3" x2="22" y2="3" class="cl-edge cl-edge-pos" stroke-width="2.5" /></svg>validated (A44)</span>
-              <span class="cl-legend-item"><svg class="cl-edge-key" viewBox="0 0 22 6"><line x1="0" y1="3" x2="22" y2="3" class="cl-edge cl-edge-pos cl-edge-ranked" stroke-width="2" /></svg>ranked neighbour (below validated threshold)</span>
+              <span class="cl-legend-item"><svg class="cl-edge-key" viewBox="0 0 22 6"><line x1="0" y1="3" x2="22" y2="3" class="cl-edge cl-edge-pos" stroke-width="2.5" /></svg>strong, |Z| ≥ 5 (A44)</span>
+              <span class="cl-legend-item"><svg class="cl-edge-key" viewBox="0 0 22 6"><line x1="0" y1="3" x2="22" y2="3" class="cl-edge cl-edge-pos cl-edge-ranked" stroke-width="2" /></svg>ranked neighbour (|Z| below 5)</span>
               <span class="cl-legend-item"><span class="cl-line-swatch cl-neg-bg"></span> negative Z</span>
               <span class="cl-legend-item"><span class="cl-complex-key"></span> same complex</span>
             </span>
@@ -59,12 +59,12 @@
           <div v-if="!shown.length" class="cl-empty">No partners match this filter.</div>
           <svg v-else :viewBox="`0 0 ${W} ${H}`" class="cl-network" role="img" :aria-label="`Co-expression partners of ${gene}`">
             <line v-for="n in nodes" :key="`e-${n.partner}`" :x1="W / 2" :y1="H / 2" :x2="n.x" :y2="n.y"
-                  :stroke-width="0.8 + 4 * n.strength" :style="{ strokeOpacity: (n.validated ? 0.3 : 0.15) + 0.6 * n.strength }"
-                  :class="['cl-edge', n.z >= 0 ? 'cl-edge-pos' : 'cl-edge-neg', { 'cl-edge-ranked': !n.validated }]"
-                  :data-edge="n.validated ? 'validated' : 'ranked'" />
-            <g v-for="n in nodes" :key="`n-${n.partner}`" class="cl-node" :class="{ 'cl-node-complex': n.shared_complexes?.length, 'cl-node-ranked': !n.validated }"
+                  :stroke-width="0.8 + 4 * n.strength" :style="{ strokeOpacity: (isStrong(n) ? 0.3 : 0.15) + 0.6 * n.strength }"
+                  :class="['cl-edge', n.z >= 0 ? 'cl-edge-pos' : 'cl-edge-neg', { 'cl-edge-ranked': !isStrong(n) }]"
+                  :data-edge="isStrong(n) ? 'strong' : 'ranked'" />
+            <g v-for="n in nodes" :key="`n-${n.partner}`" class="cl-node" :class="{ 'cl-node-complex': n.shared_complexes?.length, 'cl-node-ranked': !isStrong(n) }"
                tabindex="0" @click="$emit('select-gene', n.partner)" @keydown.enter="$emit('select-gene', n.partner)">
-              <title>{{ n.partner }} · Z {{ fmt(n.z, 1) }} · {{ n.validated ? 'validated (A44)' : 'ranked neighbour' }} · {{ n.studies }} studies · {{ n.distinct_lines }} lines<template v-if="n.shared_complexes?.length"> · same complex: {{ n.shared_complexes.join('; ') }}</template></title>
+              <title>{{ n.partner }} · Z {{ fmt(n.z, 1) }} · {{ isStrong(n) ? 'strong, |Z| ≥ 5' : 'ranked neighbour' }} · {{ n.studies }} studies · {{ n.distinct_lines }} lines<template v-if="n.shared_complexes?.length"> · same complex: {{ n.shared_complexes.join('; ') }}</template></title>
               <circle :cx="n.x" :cy="n.y" r="7" />
               <text :x="n.x + (n.anchor === 'start' ? 11 : -11)" :y="n.y + 4" :text-anchor="n.anchor">{{ n.partner }}</text>
             </g>
@@ -84,7 +84,7 @@
           </p>
         </section>
       </template>
-      <p class="cl-caption" data-test="coexp-caption">Partners ranked by |Z| on the A44 recipe, shown down to |Z| ≥ {{ minZ }} (about one chance partner per gene expected at that level). Only |Z| ≥ 5 is validated; |Z| {{ minZ }}–5 are ranked neighbours. Complex Portal is used for annotation only. Negative Z means the two proteins vary in opposite directions across lines. Co-expression is not physical interaction.</p>
+      <p class="cl-caption" data-test="coexp-caption">Partners ranked by |Z| on the A44 recipe, shown down to |Z| ≥ {{ minZ }} (about one chance partner per gene expected at that level). Only |Z| ≥ 5 passes the calibrated A44 threshold (strong); |Z| {{ minZ }}–5 are ranked neighbours. Strong is a statistical cut, not experimental validation. Complex Portal is used for annotation only. Negative Z means the two proteins vary in opposite directions across lines. Co-expression is not physical interaction.</p>
     </template>
   </div>
 </template>
@@ -95,7 +95,7 @@ import AtlasPicker from './AtlasPicker.vue'
 import StatusBlock from './StatusBlock.vue'
 import NeighboursTable from './NeighboursTable.vue'
 import { useRequest } from './useRequest.js'
-import { getGeneCoexpression, getTable, radialLayout, filterPartners, noPartnersText, COEXP_FILTERS, fmt } from '../../cellLines.js'
+import { getGeneCoexpression, getTable, radialLayout, filterPartners, noPartnersText, COEXP_FILTERS, fmt, isStrong } from '../../cellLines.js'
 
 const props = defineProps({ gene: { type: String, default: '' } })
 defineEmits(['select-gene', 'open-protein'])
@@ -112,7 +112,7 @@ const hubs = computed(() => (hubReq.data.value?.rows || []).filter((r) => r.coex
 const complexes = computed(() => data.value?.complexes || [])
 const minZ = computed(() => data.value?.display_min_z ?? 4)
 const stringUrl = computed(() => `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(props.gene)}&species=9606`)
-const validatedCount = computed(() => partners.value.filter((p) => p.validated).length)
+const strongCount = computed(() => partners.value.filter(isStrong).length)
 const shown = computed(() => filterPartners(partners.value, mode.value))
 const nodes = computed(() => radialLayout(shown.value, { cx: W / 2, cy: H / 2, radius: 220 }))
 

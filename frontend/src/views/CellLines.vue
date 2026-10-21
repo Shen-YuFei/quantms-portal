@@ -6,7 +6,7 @@
         <p>
           The frozen cancer cell-line proteome atlas: where each protein is detected, how much there is by
           lineage and cancer type, how lines differ, and what each protein moves with. External RNA
-          references are shown beside the protein values, never mixed into them.
+          references are shown beside the protein values, never mixed into them. The Methods tab explains every rule.
         </p>
       </div>
 
@@ -32,6 +32,7 @@
                   @update="updateCompare" @select-gene="selectGene" @select-line="selectLine" />
       <CoexpressionTab v-else-if="tab === 'coexpression'" :gene="gene"
                        @select-gene="(g) => setQuery({ gene: g })" @open-protein="selectGene" />
+      <MethodsTab v-else-if="tab === 'methods'" :manifest="manifest.data.value" />
       <DatasetsTab v-else-if="tab === 'datasets'" :studies="datasets.data.value" :loading="datasets.loading.value"
                    :error="datasets.error.value" :retry="datasets.run" />
 
@@ -63,6 +64,7 @@ import LineTab from '../components/cellLines/LineTab.vue'
 import CompareTab from '../components/cellLines/CompareTab.vue'
 import CoexpressionTab from '../components/cellLines/CoexpressionTab.vue'
 import DatasetsTab from '../components/cellLines/DatasetsTab.vue'
+import MethodsTab from '../components/cellLines/MethodsTab.vue'
 import '../components/cellLines/cellLines.css'
 
 const route = useRoute()
