@@ -145,28 +145,50 @@ describe('CellLines view', () => {
     expect(w.text()).toContain('Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.')
   })
 
-  it('draws the expression profile as bars grouped like the dot plot and opens a line on click', async () => {
-    const lines = [...vim.lines,
-      { line: 'CVCL_0005', name: 'L4', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.7, n_studies_measured: 1, n_studies_present: 1, n_studies_present_high: 0 },
-      { line: 'CVCL_0006', name: 'L5', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: null, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0 }]
-    respond({ '/genes/VIM': { ...vim, lines } })
+  it('draws box plots by group with points, highlight, tooltips and line navigation', async () => {
+    const mk = (i, l4, present, plex = 0, lineage = 'Lung') => ({ line: `CVCL_10${i}`, name: `N${i}`, lineage, primary_disease: 'NSCLC', l4_mean: l4, n_studies_measured: 1, n_studies_present: present, n_studies_present_high: 0, n_studies_plex_identified: plex })
+    const lines = [...vim.lines, mk(1, 0.8, 1), mk(2, 0.6, 1), mk(3, 0.2, 0), mk(4, 0.3, 0, 1), mk(5, null, 1),
+      mk(6, 0.9, 1, 0, 'Skin'), mk(7, 0.7, 1, 0, 'Skin'), mk(8, 0.5, 0, 0, 'Skin')]
+    const groupsApi = [
+      { kind: 'lineage', value: 'Skin', n_called: 3, n_detected: 2, enrichment: 0.4, n_studies: 2, n_lines: 3 },
+      { kind: 'lineage', value: 'Lung', n_called: 6, n_detected: 3, enrichment: 0.1, n_studies: 2, n_lines: 8 },
+      { kind: 'lineage', value: 'Breast', n_called: 1, n_detected: 1, enrichment: null, n_studies: 1, n_lines: 1 },
+    ]
+    respond({ '/genes/VIM': { ...vim, lines, groups: groupsApi } })
     const { w, router } = await mountAt('/apps/cell-lines?gene=VIM')
-    const profile = w.find('[data-test="profile"]')
-    const groups = profile.findAll('[data-test="profile-group"]')
-    expect(groups.map((g) => g.find('.cl-prof-label').text())).toEqual(['Lung'])
-    const bars = groups[0].findAll('.cl-bar')
-    expect(bars.map((b) => [b.attributes('data-line'), b.classes().find((c) => c.startsWith('cl-bar-'))])).toEqual([
-      ['CVCL_0001', 'cl-bar-detected'], ['CVCL_0005', 'cl-bar-detected'], ['CVCL_0002', 'cl-bar-absent'], ['CVCL_0004', 'cl-bar-nocall']])
-    expect(bars[0].attributes('style')).toContain('height: 90%')
-    expect(bars[0].attributes('title')).toBe('L1 · Lung / NSCLC · rank 0.90 · detected')
-    const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="profile"]').exists())
-    expect(card.text()).toContain('Each bar is one cell line: its rank among the lines measured in the same study (0 = lowest, 1 = highest), averaged over studies.')
+    const plot = w.find('[data-test="boxplot"]')
+    const groups = plot.findAll('[data-test="box-group"]')
+    expect(groups.map((g) => g.find('title').text())).toEqual(['Skin', 'Lung'])
+    const lungPts = groups[1].findAll('circle')
+    expect(lungPts.map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002', 'CVCL_101', 'CVCL_102', 'CVCL_103'])
+    expect(lungPts.map((c) => c.classes().includes('cl-pt-on'))).toEqual([true, false, true, true, false])
+    expect(groups[1].find('.cl-box-iqr').exists()).toBe(true)
+
+    await groups[1].find('.cl-box-hit').trigger('mouseenter')
+    const tip = w.find('[data-test="box-tip"]').text()
+    expect(tip).toContain('Lung · 5 lines · median 0.60 · IQR')
+    expect(tip).toContain('+0.10 vs other lines in the same studies')
+    expect(tip).toContain('+2 lines without a presence call, not shown')
+    await lungPts[0].trigger('mouseenter')
+    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · rank 0.90')
+
+    await w.find('[data-test="hi-lineage"]').setValue('Skin')
+    expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_106', 'CVCL_107', 'CVCL_108'])
+    await w.find('[data-test="hi-lineage"]').setValue('')
+    await w.find('[data-test="hi-line"]').setValue('n2')
+    expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_102'])
+    expect(w.findAll('[data-test="box-group"]')[0].classes()).toContain('dim')
+
+    const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="boxplot"]').exists())
+    expect(card.find('[data-test="box-caption"]').text()).toContain('Points are lines (filled = detected). Lines without a presence call are not shown. 2 such lines for this gene.')
     expect(card.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
-    await w.find('[data-test="profile-toggle"]').trigger('click')
-    expect(w.findAll('[data-test="profile-group"]').map((g) => g.find('.cl-prof-label').text())).toEqual(['Lung', 'Breast'])
-    await bars[2].trigger('click')
+
+    await w.find('[data-test="box-toggle"]').trigger('click')
+    expect(w.findAll('[data-test="box-group"]').map((g) => g.find('title').text())).toEqual(['Skin', 'Lung', 'Breast'])
+
+    await lungPts[2].trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', line: 'CVCL_0002' })
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', line: 'CVCL_101' })
   })
 
   it('reads and writes the grouping as by= in the URL', async () => {
