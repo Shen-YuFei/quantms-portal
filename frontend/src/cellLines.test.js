@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   compareParams, compare, presenceState, presenceTooltip, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, profileBars,
+  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupBoxes, tukeyBox,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -138,13 +138,24 @@ describe('group dot plot', () => {
     expect(groupDots(lines, groups, 'primary_disease').map((r) => r.value)).toEqual(['IDC'])
   })
 
-  it('builds profile bars in dot-plot group order, highest rank first, nulls omitted', () => {
-    const bars = profileBars(lines, groups, 'lineage')
-    expect(bars.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true]])
-    const lung = bars.find((g) => g.value === 'Lung')
-    expect(lung.bars.map((b) => [b.line, b.state])).toEqual([['L1', 'detected'], ['L2', 'detected'], ['L3', 'nocall'], ['L4', 'absent']])
-    expect(bars.flatMap((g) => g.bars).some((b) => b.line === 'L5')).toBe(false)
-    expect(bars.find((g) => g.value === 'Breast').bars.map((b) => b.l4_mean)).toEqual([0.95, 0.85, 0.75])
+  it('computes Tukey boxes with whiskers inside 1.5×IQR', () => {
+    const b = tukeyBox([0, 0.4, 0.45, 0.5, 0.55, 0.6, 1])
+    expect(b).toMatchObject({ median: 0.5, lo: 0.4, hi: 0.6 })
+    expect(b.q1).toBeCloseTo(0.425)
+    expect(b.q3).toBeCloseTo(0.575)
+    expect(tukeyBox([0.2, 0.4, 0.6, 0.8, 1])).toMatchObject({ lo: 0.2, hi: 1 })
+    expect(tukeyBox([])).toBeNull()
+  })
+
+  it('builds box groups in dot-plot order, leaving out lines without a presence call', () => {
+    const boxes = groupBoxes(lines, groups, 'lineage')
+    expect(boxes.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true]])
+    const lung = boxes.find((g) => g.value === 'Lung')
+    expect(lung.points.map((p) => [p.line, p.detected])).toEqual([['L1', true], ['L2', true], ['L4', false]])
+    expect(lung.nocall).toBe(1)
+    expect(lung.median).toBe(0.6)
+    expect(lung.box).toBeNull()
+    expect(boxes.flatMap((g) => g.points).some((p) => p.line === 'L5' || p.line === 'L3')).toBe(false)
   })
 
   it('maps the by= URL param to a group kind and back', () => {

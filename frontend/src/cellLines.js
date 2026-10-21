@@ -145,21 +145,33 @@ export function groupDots(lines, groups, kind = 'lineage') {
     (b.enrichment ?? 0) - (a.enrichment ?? 0) || b.n_lines - a.n_lines)
 }
 
-export const PROFILE_STATES = [
-  { id: 'detected', label: 'Detected' },
-  { id: 'nocall', label: 'No presence call' },
-  { id: 'absent', label: 'Not detected' },
-]
-const PROFILE_STATE = { high: 'detected', detected: 'detected', nocall: 'nocall', absent: 'absent' }
+/** Five-number box with Tukey whiskers (most extreme values within 1.5×IQR of the box). */
+export function tukeyBox(values) {
+  const box = boxStats(values)
+  if (!box) return null
+  const v = values.filter((x) => Number.isFinite(x))
+  const iqr = box.q3 - box.q1
+  const inLo = v.filter((x) => x >= box.q1 - 1.5 * iqr)
+  const inHi = v.filter((x) => x <= box.q3 + 1.5 * iqr)
+  return { ...box, iqr, lo: Math.min(...inLo), hi: Math.max(...inHi) }
+}
 
-/** Bar-profile groups in dot-plot order; bars are lines with a level 4 value, highest first. */
-export function profileBars(lines, groups, kind = 'lineage') {
-  return groupDots(lines, groups, kind).map((g) => ({
-    value: g.value, small: g.small,
-    bars: g.rows.filter((r) => Number.isFinite(r.l4_mean))
-      .map((r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease, l4_mean: r.l4_mean, state: PROFILE_STATE[r.state] }))
-      .sort((x, y) => y.l4_mean - x.l4_mean),
-  })).filter((g) => g.bars.length)
+/**
+ * Box-plot groups in dot-plot order. Points are lines with a rank and a presence call; lines
+ * without a presence call are counted, not plotted, since their rank would read as expression.
+ */
+export function groupBoxes(lines, groups, kind = 'lineage') {
+  return groupDots(lines, groups, kind).map((g) => {
+    const points = g.rows
+      .filter((r) => r.state !== 'nocall' && Number.isFinite(r.l4_mean))
+      .map((r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease, l4_mean: r.l4_mean, detected: r.state === 'high' || r.state === 'detected' }))
+    return {
+      value: g.value, enrichment: g.enrichment, points, nocall: g.rows.filter((r) => r.state === 'nocall').length,
+      median: boxStats(points.map((p) => p.l4_mean))?.median ?? null,
+      box: points.length >= BOX_MIN_LINES ? tukeyBox(points.map((p) => p.l4_mean)) : null,
+      small: g.small || points.length < MIN_GROUP_LINES,
+    }
+  }).filter((g) => g.points.length)
 }
 
 // RNA reference ------------------------------------------------------------------
