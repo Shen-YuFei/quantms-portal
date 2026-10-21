@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
-  compareParams, compare, presenceState, presenceTooltip, errorMessage, tabFromQuery, listFromQuery, boxStats,
+  compareParams, compare, presenceState, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupBoxes, tukeyBox,
+  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupSummary, tukeyBox,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -53,12 +53,6 @@ describe('presence classification', () => {
     expect(presenceState({ n_studies_measured: 2, n_studies_present: 0, n_studies_present_high: 0 })).toBe('absent')
     expect(presenceState({ n_studies_measured: 0, n_studies_present: 0 })).toBe('unmeasured')
     expect(presenceState(undefined)).toBe('unmeasured')
-  })
-
-  it('labels line-level presence as k of N studies that measured it', () => {
-    expect(presenceTooltip({ name: 'A549', n_studies_measured: 3, n_studies_present: 2, n_studies_present_high: 1 }))
-      .toBe('A549: detected in 2 of 3 studies that measured it (≥2 peptides in 1)')
-    expect(presenceTooltip({ line: 'CVCL_1', n_studies_measured: 0 })).toBe('CVCL_1: not measured')
   })
 })
 
@@ -149,9 +143,10 @@ describe('group dot plot', () => {
     expect(tukeyBox([])).toBeNull()
   })
 
-  it('builds box groups in dot-plot order: values as points, measured-not-detected apart, no-call lines left out', () => {
-    const boxes = groupBoxes(lines, groups, 'lineage')
-    expect(boxes.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true]])
+  it('builds summary rows in dot-plot order: detection, enrichment, amounts; not-detected apart; no-call lines left out', () => {
+    const boxes = groupSummary(lines, groups, 'lineage')
+    expect(boxes.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true], ['Bone', true]])
+    expect(boxes.find((g) => g.value === 'Lung')).toMatchObject({ n_called: 4, n_detected: 2, frac: 0.5, enrichment: 0.12 })
     const lung = boxes.find((g) => g.value === 'Lung')
     expect(lung.points.map((p) => [p.line, p.value, p.detected])).toEqual([['L1', 1.5, true], ['L2', 0.5, true]])
     expect(lung.absent.map((p) => p.line)).toEqual(['L4'])
@@ -264,7 +259,5 @@ describe('lines without a per-line presence call', () => {
     const row = { name: 'X', n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }
     expect(presenceState(row)).toBe('nocall')
     expect(presenceState({ ...row, n_studies_measured: 2, n_studies_present: 1 })).toBe('detected')
-    expect(presenceTooltip(row)).toBe('X: detected in 0 of 1 studies that measured it (≥2 peptides in 0); no per-line presence call in 1')
-    expect(presenceTooltip(row)).not.toMatch(/TMT|plex/)
   })
 })

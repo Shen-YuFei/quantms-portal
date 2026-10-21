@@ -194,19 +194,24 @@ describe('CellLines view', () => {
     expect(String(router.currentRoute.value.query.lines)).toBe('CVCL_0031,CVCL_0023')
   })
 
-  it('profiles the gene within one study, with not-detected lines apart, and groups the values table by study', async () => {
-    respond()
+  it('profiles the gene within one study, disables studies without values, and groups the values table by study', async () => {
+    respond({ '/genes/VIM': { ...vim, studies: [{ study: 'S2', acq: ['TMT'], methods: ['piBAQ + IRS'], n_lines: 400, accessions: [] }, ...vim.studies] } })
     const { w } = await mountAt('/apps/cell-lines?tab=protein&gene=VIM')
-    expect(w.find('[data-test="profile-study"]').text()).toContain('S1 · DIA · directLFQ · 40 lines')
-    expect(w.find('[data-test="profile-caption"]').text()).toContain('log2 difference from this study\'s average for VIM')
-    const plot = w.find('[data-test="profile-plot"]')
-    const lung = plot.findAll('[data-test="profile-group"]')[0]
-    expect(lung.find('title').text()).toBe('Lung')
-    expect(lung.findAll('circle.cl-pt-absent').map((c) => c.attributes('data-line'))).toEqual(['CVCL_0004'])
-    expect(lung.findAll('circle:not(.cl-pt-absent)').map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002'])
-    await lung.findAll('circle')[0].trigger('mouseenter')
-    expect(w.text()).toContain('L1 · +0.30 log2 · 1.2× the study average')
+    const select = w.find('[data-test="profile-study"]')
+    expect(select.element.value).toBe('S1')
+    const options = select.findAll('option')
+    expect(options.map((o) => [o.text(), o.element.disabled])).toEqual([
+      ['S1 · DIA · directLFQ · 2 of 40 lines quantified', false],
+      ['S2 · TMT · piBAQ + IRS · 0 of 400 lines quantified (not quantified)', true],
+    ])
+    expect(w.find('[data-test="profile-caption"]').text()).toContain("log2 difference from S1's average for VIM")
+    const lung = w.find('[data-test="profile-plot"]').findAll('[data-test="profile-group"]')[0]
+    expect(lung.find('.cl-gs-name').text()).toBe('Lung')
+    expect(lung.findAll('.cl-strip-dot').map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002'])
+    expect(lung.find('.cl-strip-nd').text()).toBe('1 n.d.')
+    expect(lung.find('.cl-strip-dot').attributes('title')).toBe('L1 · +0.30 log2 · 1.2× the study average')
     const table = w.find('[data-test="values-table"]')
+    expect(w.find('[data-test="values-details"]').attributes('open')).toBeUndefined()
     expect(table.find('[data-test="study-row"]').text()).toContain('S1 · DIA · directLFQ · 40 lines')
     expect(table.text()).toContain('Difference from study average (log2)')
     expect(table.text()).not.toContain('l3')
@@ -249,41 +254,16 @@ describe('CellLines view', () => {
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'protein', gene: 'DES' })
   })
 
-  it('shows one dot-plot row per lineage coloured by within-study enrichment', async () => {
-    respond()
-    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
-    const rows = w.findAll('[data-test="dot-row"]')
-    expect(rows).toHaveLength(1)
-    expect(rows[0].text()).toContain('Lung')
-    expect(rows[0].find('[data-test="dot-count"]').text()).toBe('1 of 2 detected')
-    expect(rows[0].find('[data-test="dot-enrichment"]').text()).toBe('+0.35 vs other lines')
-    expect(rows[0].find('.cl-gdot').attributes('style')).toContain('background: rgb(')
-    expect(w.find('[data-test="dot-legend"]').text()).toContain('Colour: higher/lower than other lines measured in the same studies')
-    expect(w.find('[data-test="dot-strip"]').exists()).toBe(false)
-    await rows[0].find('button').trigger('click')
-    const strip = w.find('[data-test="dot-strip"]')
-    expect(strip.findAll('.cl-hpt').map((p) => p.classes().find((c) => c.startsWith('cl-p-')))).toEqual(['cl-p-high', 'cl-p-absent', 'cl-p-nocall'])
-    expect(strip.text()).toContain('No presence call')
-    expect(strip.find('.cl-hpt').attributes('title')).toContain('L1: detected in 2 of 2 studies that measured it')
-
-    const toggle = w.find('[data-test="dot-toggle"]')
-    expect(toggle.text()).toContain('Show 1 group with fewer than 3 lines or no within-study comparison')
-    await toggle.trigger('click')
-    expect(w.findAll('[data-test="dot-row"]').map((r) => r.find('.cl-presence-label').text())).toEqual(['Lung', 'Breast'])
-    expect(w.findAll('[data-test="dot-row"]')[1].find('[data-test="dot-count"]').text()).toBe('1 of 1 detected')
-  })
-
   it('keeps acquisition wording out of the biology views of the protein tab', async () => {
     respond()
     const { w } = await mountAt('/apps/cell-lines?gene=VIM')
-    await w.findAll('[data-test="dot-row"]')[0].find('button').trigger('click')
     const perStudy = (c) => c.find('[data-test="values-table"]').exists() || c.find('[data-test="profile-study"]').exists()
     const biology = w.findAll('section.cl-card').filter((c) => !perStudy(c))
     for (const c of biology) expect(c.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
-    expect(w.text()).toContain('Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.')
+    expect(w.find('[data-test="group-summary"]').exists()).toBe(true)
   })
 
-  it('draws box plots by group with points, highlight, tooltips and line navigation', async () => {
+  it('summarises each lineage in one row: detection, enrichment and an amount strip', async () => {
     const mk = (i, l3, present, plex = 0, lineage = 'Lung') => ({ line: `CVCL_10${i}`, name: `N${i}`, lineage, primary_disease: 'NSCLC', l4_mean: 0.5, l3_mean: l3, n_studies_measured: 1, n_studies_present: present, n_studies_present_high: 0, n_studies_plex_identified: plex })
     const lines = [...vim.lines, mk(1, 1.2, 1), mk(2, 0.4, 1), mk(3, -1, 0), mk(4, 0.3, 0, 1), mk(5, null, 1), mk(9, null, 0),
       mk(6, 2.5, 1, 0, 'Skin'), mk(7, 2, 1, 0, 'Skin'), mk(8, 1, 0, 0, 'Skin')]
@@ -294,48 +274,48 @@ describe('CellLines view', () => {
     ]
     respond({ '/genes/VIM': { ...vim, lines, groups: groupsApi } })
     const { w, router } = await mountAt('/apps/cell-lines?gene=VIM')
-    const plot = w.find('[data-test="boxplot"]')
-    const groups = plot.findAll('[data-test="box-group"]')
-    expect(groups.map((g) => g.find('title').text())).toEqual(['Skin', 'Lung'])
-    const lungPts = groups[1].findAll('circle:not(.cl-pt-absent)')
-    expect(lungPts.map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002', 'CVCL_101', 'CVCL_102', 'CVCL_103'])
-    expect(lungPts.map((c) => c.classes().includes('cl-pt-on'))).toEqual([true, false, true, true, false])
-    expect(groups[1].findAll('circle.cl-pt-absent').map((c) => c.attributes('data-line'))).toEqual(['CVCL_109'])
-    expect(groups[1].find('.cl-box-iqr').exists()).toBe(true)
+    const rows = () => w.findAll('[data-test="gs-row"]')
+    expect(rows().map((r) => r.find('.cl-gs-name').text())).toEqual(['Skin 3', 'Lung 8'])
+    const lung = rows()[1]
+    expect(lung.find('[data-test="gs-det"]').text()).toBe('3 of 6')
+    expect(lung.find('.cl-gs-enr-val').text()).toBe('+0.10')
+    const dots = lung.findAll('.cl-strip-dot')
+    expect(dots.map((c) => c.attributes('data-line'))).toEqual(['CVCL_0001', 'CVCL_0002', 'CVCL_101', 'CVCL_102', 'CVCL_103'])
+    expect(dots.map((c) => c.classes().includes('on'))).toEqual([true, false, true, true, false])
+    expect(lung.find('.cl-strip-nd').text()).toBe('1 n.d.')
+    expect(lung.find('.cl-strip-iqr').exists()).toBe(true)
+    expect(dots[0].attributes('title')).toBe('L1 · +1.60 log2 · 3.0× the average')
 
-    await groups[1].find('.cl-box-hit').trigger('mouseenter')
-    const tip = w.find('[data-test="box-tip"]').text()
-    expect(tip).toContain('Lung · 5 cell lines with a value · median +0.40 log2 (1.3× the average) · middle half ±0.00 to +1.20')
-    expect(tip).toContain('1 measured, not detected')
-    expect(tip).toContain('+0.10 vs other cell lines in the same studies')
-    expect(tip).toContain('+2 cell lines measured only in pooled samples, not shown')
-    await lungPts[0].trigger('mouseenter')
-    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · +1.60 log2 · 3.0× the average')
-
-    await w.find('[data-test="hi-lineage"]').setValue('Skin')
-    expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_106', 'CVCL_107', 'CVCL_108'])
-    await w.find('[data-test="hi-lineage"]').setValue('')
     await w.find('[data-test="hi-line"]').setValue('n2')
-    expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_102'])
-    expect(w.findAll('[data-test="box-group"]')[0].classes()).toContain('dim')
+    expect(w.findAll('.cl-strip-dot.ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_102'])
+    expect(rows()[0].classes()).toContain('dim')
+    await w.find('[data-test="hi-line"]').setValue('')
 
-    const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="boxplot"]').exists())
-    expect(card.find('[data-test="box-caption"]').text()).toContain('Cell lines measured only in pooled samples are left out, because pooling cannot show whether the protein is present in one cell line. 2 such cell lines for this gene.')
+    const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="group-summary"]').exists())
+    expect(card.find('[data-test="box-caption"]').text()).toContain('2 cell lines measured only in pooled samples are not shown.')
     expect(card.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
 
-    await w.find('[data-test="box-toggle"]').trigger('click')
-    expect(w.findAll('[data-test="box-group"]').map((g) => g.find('title').text())).toEqual(['Skin', 'Lung', 'Breast'])
+    await w.find('[data-test="gs-toggle"]').trigger('click')
+    expect(rows().map((r) => r.find('.cl-gs-name').text())).toEqual(['Skin 3', 'Lung 8', 'Breast 1'])
 
-    await lungPts[2].trigger('click')
+    await rows()[1].findAll('.cl-strip-dot')[2].trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', line: 'CVCL_101' })
+  })
+
+  it('says so when no cell line has a per-line amount', async () => {
+    const lines = vim.lines.map((l) => ({ ...l, l3_mean: null, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }))
+    respond({ '/genes/VIM': { ...vim, lines, values: [] } })
+    const { w } = await mountAt('/apps/cell-lines?gene=VIM')
+    expect(w.find('[data-test="gs-empty"]').text()).toContain('No cell line has a per-line amount for VIM')
+    expect(w.find('[data-test="profile-empty"]').text()).toContain('VIM has no quantified value in any study.')
   })
 
   it('reads and writes the grouping as by= in the URL', async () => {
     respond()
     const { w, router } = await mountAt('/apps/cell-lines?gene=VIM&by=disease')
     expect(w.find('[aria-label="Group by"] button.active').text()).toBe('Primary disease')
-    expect(w.text()).toContain('Detection and abundance by primary disease')
+    expect(w.text()).toContain('VIM by primary disease: detection, enrichment and amount')
     await w.findAll('[aria-label="Group by"] button').find((b) => b.text() === 'Lineage').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({ gene: 'VIM', by: 'lineage' })

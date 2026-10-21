@@ -63,7 +63,7 @@
         </div>
         <div class="cl-facts">
           <div class="cl-fact"><div class="cl-fact-label">RNA SD across lines</div><div class="cl-fact-value">{{ fmt(a.rna_sd) }}</div></div>
-          <div class="cl-fact"><div class="cl-fact-label">Protein reliability</div><div class="cl-fact-value">{{ a.reliability_class || 'not classified' }} <span class="cl-muted">ICC {{ fmt(a.icc) }}</span></div></div>
+          <div class="cl-fact"><div class="cl-fact-label">Protein reliability</div><div class="cl-fact-value">{{ a.reliability_class || 'not classified' }} <span v-if="a.reliability_class" class="cl-muted">ICC {{ fmt(a.icc) }}</span></div></div>
           <div class="cl-fact">
             <div class="cl-fact-label">Detected / measured</div>
             <div class="cl-fact-value">{{ a.n_lines_present ?? '—' }} / {{ a.n_lines_measured ?? '—' }}</div>
