@@ -57,11 +57,11 @@
         <summary>How to read this page</summary>
         <dl>
           <dt>Detected</dt>
-          <dd>The protein was identified in that line. TMT studies identify proteins per plex (a pool of 10–16 samples), not per line, so they never count as a line detection.</dd>
+          <dd>The protein was identified in that cell line. TMT studies identify proteins per plex (a pool of 10–16 samples), not per cell line, so they never count as a detection in one cell line.</dd>
           <dt>Profile within each study</dt>
-          <dd>How the protein varies across the lines of one study, as log2 difference from that study's average. DIA and label-free DDA use directLFQ; TMT uses piBAQ with IRS on the reference channel. Each study has its own scale.</dd>
-          <dt>Across studies</dt>
-          <dd>Where a line sits among the lines measured in the same studies, from 0 (lowest) to 1 (highest), averaged over studies. Measured lines where the protein was not detected count as lowest. This is the only view that combines studies.</dd>
+          <dd>How the protein varies across the cell lines of one study, as log2 difference from that study's average. DIA and label-free DDA use directLFQ; TMT uses piBAQ with IRS on the reference channel. Each study has its own scale.</dd>
+          <dt>Cell lines ranked within their studies</dt>
+          <dd>How much of the protein a cell line has compared with the other cell lines in the same study: 1 = the most, 0 = the least or not detected, averaged over the cell line's studies. Ranks have no units, so this is the only view that combines studies.</dd>
           <dt>Abundance in sample</dt>
           <dd>log2 piBAQ: how abundant the protein is compared with other proteins in the same sample. Its scale differs between studies, so compare it only within a study.</dd>
         </dl>
@@ -87,11 +87,11 @@
 
       <section class="cl-card">
         <div class="cl-card-head">
-          <h3>Across studies: where each line sits</h3>
+          <h3>Cell lines ranked within their studies</h3>
           <GroupToggle v-model="kind" />
         </div>
         <GroupBoxPlot :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
-        <p class="cl-caption" data-test="box-caption">Each point is a line: the share of lines measured in the same studies that it is above (0 = lowest, 1 = highest), averaged over its studies. Measured lines where the protein was not detected count as lowest. Boxes summarise each group. Points are lines (filled = detected). Lines without a presence call are not shown. <template v-if="noCallLines">{{ noCallLines }} such line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or point for details; click a point to open the line.</p>
+        <p class="cl-caption" data-test="box-caption">Each dot is one cell line. Its height shows how much {{ gene }} it has compared with the other cell lines measured in the same study: 1 = the most, 0.5 = in the middle, 0 = the least or not detected. A cell line measured in several studies is placed at its average. Filled dots: {{ gene }} detected in that cell line. Each box shows the spread of one {{ kindLabel }}. Cell lines measured only in pooled samples are left out, because pooling cannot show whether the protein is present in one cell line. <template v-if="noCallLines">{{ noCallLines }} such cell line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or dot for details; click a dot to open the cell line.</p>
       </section>
 
       <section class="cl-card">

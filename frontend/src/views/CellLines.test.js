@@ -191,10 +191,10 @@ describe('CellLines view', () => {
     await groups[1].find('.cl-box-hit').trigger('mouseenter')
     const tip = w.find('[data-test="box-tip"]').text()
     expect(tip).toContain('Lung · 5 lines · median 60% · middle half 50%–80%')
-    expect(tip).toContain('+0.10 vs other lines in the same studies')
+    expect(tip).toContain('+0.10 vs other cell lines in the same studies')
     expect(tip).toContain('+2 lines without a presence call, not shown')
     await lungPts[0].trigger('mouseenter')
-    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · above 90% of lines in the same studies')
+    expect(w.find('[data-test="box-tip"]').text()).toBe('L1 · more than 90% of the cell lines in its studies')
 
     await w.find('[data-test="hi-lineage"]').setValue('Skin')
     expect(w.findAll('circle.cl-pt-ring').map((c) => c.attributes('data-line'))).toEqual(['CVCL_106', 'CVCL_107', 'CVCL_108'])
@@ -204,7 +204,7 @@ describe('CellLines view', () => {
     expect(w.findAll('[data-test="box-group"]')[0].classes()).toContain('dim')
 
     const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="boxplot"]').exists())
-    expect(card.find('[data-test="box-caption"]').text()).toContain('Points are lines (filled = detected). Lines without a presence call are not shown. 2 such lines for this gene.')
+    expect(card.find('[data-test="box-caption"]').text()).toContain('Cell lines measured only in pooled samples are left out, because pooling cannot show whether the protein is present in one cell line. 2 such cell lines for this gene.')
     expect(card.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
 
     await w.find('[data-test="box-toggle"]').trigger('click')

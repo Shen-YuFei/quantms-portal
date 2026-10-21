@@ -14,7 +14,7 @@ export const GROUP_KINDS = [
   { id: 'lineage', label: 'Lineage' },
   { id: 'primary_disease', label: 'Primary disease' },
 ]
-export const L4_AXIS = 'Relative position among lines of the same studies (0 = lowest, 1 = highest)'
+export const L4_AXIS = 'Rank among cell lines in the same study (0 = least, 1 = most)'
 
 const get = (path, params) => apiGet(CELL_LINES_BASE, path, params)
 

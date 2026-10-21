@@ -41,7 +41,7 @@
             <line v-if="g.median != null" :x1="cx(i) - BOX_W / 2" :x2="cx(i) + BOX_W / 2" :y1="y(g.median)" :y2="y(g.median)" class="cl-box-median" />
             <circle v-for="(p, j) in g.points" :key="p.line" :cx="cx(i) + jitter(j)" :cy="y(p.l4_mean)" r="2.6"
                     class="cl-box-pt" :class="{ 'cl-pt-on': p.detected, 'cl-pt-ring': isHi(p) }" :data-line="p.line"
-                    @mouseenter="showTip(cx(i) + jitter(j), y(p.l4_mean), `${p.name} · above ${pct(p.l4_mean)} of lines in the same studies${p.detected ? '' : ' · not detected'}`)"
+                    @mouseenter="showTip(cx(i) + jitter(j), y(p.l4_mean), `${p.name} · more than ${pct(p.l4_mean)} of the cell lines in its studies${p.detected ? '' : ' · not detected'}`)"
                     @click="$emit('select-line', p.line)" />
             <text :transform="`translate(${cx(i) + 4}, ${TOP + PLOT_H + 8}) rotate(-90)`" text-anchor="end" class="cl-box-label">
               <title>{{ g.value }}</title>{{ short(g.value) }}
@@ -108,7 +108,7 @@ const boxTip = (g) => [
   `${g.value} · ${g.points.length} lines`,
   g.median != null ? `median ${pct(g.median)}` : '',
   g.box ? `middle half ${pct(g.box.q1)}–${pct(g.box.q3)}` : '',
-  g.enrichment != null ? `${signed(g.enrichment)} vs other lines in the same studies` : 'no within-study comparison',
+  g.enrichment != null ? `${signed(g.enrichment)} vs other cell lines in the same studies` : 'no within-study comparison',
   g.nocall ? `+${g.nocall} line${g.nocall === 1 ? '' : 's'} without a presence call, not shown` : '',
 ].filter(Boolean).join(' · ')
 </script>
