@@ -96,6 +96,16 @@
           <RnaPanel v-if="rna.data.value" :rna="rna.data.value" :lines="d.lines" :gene="gene" />
         </section>
 
+        <section class="cl-card cl-span-wide">
+          <div class="cl-card-head">
+            <h3>Co-expression neighbours</h3>
+            <button type="button" class="cl-linkish" @click="$emit('open-coexpression', gene)">Open network →</button>
+          </div>
+          <StatusBlock :loading="coexp.loading.value" :error="coexp.error.value" what="Co-expression" :retry="() => coexp.run(gene)" />
+          <NeighboursTable v-if="coexp.data.value" :gene="gene" :partners="coexp.data.value.partners || []"
+                           :threshold="coexp.data.value.threshold || ''" :min-z="coexp.data.value.display_min_z ?? 4" @select-gene="(g) => $emit('select-gene', g)" />
+        </section>
+
         <details class="cl-card cl-browse cl-span-all" data-test="values-details">
           <summary>Values per study<span class="cl-muted"> · {{ (d.values || []).length.toLocaleString('en-US') }} measurements in {{ (d.studies || []).length }} studies</span></summary>
           <div class="cl-toolbar">
@@ -143,15 +153,6 @@
           </div>
         </details>
 
-        <section class="cl-card cl-span-all">
-          <div class="cl-card-head">
-            <h3>Co-expression neighbours</h3>
-            <button type="button" class="cl-linkish" @click="$emit('open-coexpression', gene)">Open network →</button>
-          </div>
-          <StatusBlock :loading="coexp.loading.value" :error="coexp.error.value" what="Co-expression" :retry="() => coexp.run(gene)" />
-          <NeighboursTable v-if="coexp.data.value" :gene="gene" :partners="coexp.data.value.partners || []"
-                           :threshold="coexp.data.value.threshold || ''" :min-z="coexp.data.value.display_min_z ?? 4" @select-gene="(g) => $emit('select-gene', g)" />
-        </section>
       </div>
     </template>
   </div>

@@ -10,6 +10,20 @@
     <StatusBlock v-else :loading="req.loading.value" :error="req.error.value" what="Co-expression"
                  :loading-text="`Loading the partners of ${gene}…`" :retry="load" />
 
+    <section v-if="(!gene || (data && !partners.length)) && hubs.length" class="cl-card" data-test="coexp-hubs">
+      <div class="cl-card-head">
+        <h3>Proteins with the most validated partners</h3>
+        <span class="cl-muted">a starting point for exploring the network</span>
+      </div>
+      <div class="cl-hubs">
+        <button v-for="h in hubs" :key="h.gene" type="button" class="cl-hub" data-test="coexp-hub" @click="$emit('select-gene', h.gene)">
+          <b>{{ h.gene }}</b> <span class="cl-muted">{{ h.coexpression_partners }} partners</span>
+          <span class="cl-hub-name">{{ h.protein_name }}</span>
+          <span v-if="h.complex_name" class="cl-hub-cx">{{ h.complex_name }}</span>
+        </button>
+      </div>
+    </section>
+
     <template v-if="gene && data">
       <div v-if="!partners.length" class="cl-notice" data-test="coexp-empty">
         {{ noPartnersText(gene, minZ) }}
@@ -81,7 +95,7 @@ import AtlasPicker from './AtlasPicker.vue'
 import StatusBlock from './StatusBlock.vue'
 import NeighboursTable from './NeighboursTable.vue'
 import { useRequest } from './useRequest.js'
-import { getGeneCoexpression, radialLayout, filterPartners, noPartnersText, COEXP_FILTERS, fmt } from '../../cellLines.js'
+import { getGeneCoexpression, getTable, radialLayout, filterPartners, noPartnersText, COEXP_FILTERS, fmt } from '../../cellLines.js'
 
 const props = defineProps({ gene: { type: String, default: '' } })
 defineEmits(['select-gene', 'open-protein'])
@@ -92,6 +106,9 @@ const req = useRequest(getGeneCoexpression)
 const mode = ref('all')
 const data = computed(() => req.data.value)
 const partners = computed(() => data.value?.partners || [])
+const hubReq = useRequest(getTable)
+hubReq.run({ sort: 'coexpression', limit: 18, hide: true })
+const hubs = computed(() => (hubReq.data.value?.rows || []).filter((r) => r.coexpression_partners > 0))
 const complexes = computed(() => data.value?.complexes || [])
 const minZ = computed(() => data.value?.display_min_z ?? 4)
 const stringUrl = computed(() => `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(props.gene)}&species=9606`)

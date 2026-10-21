@@ -141,7 +141,7 @@ describe('CellLines view', () => {
     expect(tiles).toHaveLength(7)
     expect(tiles[0].text()).toContain('15,704')
     expect(tiles[4].text()).toContain('240lineage / group enriched1,414 more enhanced · 335 robust calls')
-    expect(w.findAll('[data-test="heatmap"] .cl-heat-body').map((r) => r.attributes('data-gene'))).toEqual(['SFTPB', 'TRPS1'])
+    expect(w.findAll('[data-test="heatmap"] .cl-lmap-body').map((r) => r.attributes('data-gene'))).toEqual(['SFTPB', 'TRPS1'])
     const rows = w.findAll('[data-test="protein-row"]')
     expect(rows.map((r) => r.find('.cl-pt-gene').text())).toEqual(['SFTPB', 'VIM'])
     expect(rows[1].text()).toContain('971 / 1,119 lines')
@@ -150,7 +150,7 @@ describe('CellLines view', () => {
     expect(w.findAll('[data-test="spec-chip"]')[0].text()).toBe('lineage enriched 1')
     expect(w.find('[data-test="table-csv"]').attributes('href')).toMatch(/\/table\?format=csv$/)
 
-    await w.findAll('[data-test="heatmap"] .cl-heat-body')[0].trigger('click')
+    await w.findAll('[data-test="heatmap"] .cl-lmap-body')[0].trigger('click')
     await flushPromises()
     const last = apiGet.mock.calls.filter((c) => c[1] === '/table').at(-1)[2]
     expect([last.q, last.lineage]).toEqual(['SFTPB', 'Lung'])
@@ -164,6 +164,20 @@ describe('CellLines view', () => {
     await rows[1].find('.cl-pt-gene').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toMatchObject({ tab: 'protein', gene: 'VIM' })
+  })
+
+  it('shows cell lines by lineage on the overview and opens the filtered list', async () => {
+    respond()
+    const { w, router } = await mountAt('/apps/cell-lines')
+    const bars = w.findAll('[data-test="lineage-bar"]')
+    expect(bars.map((b) => b.find('.cl-lbar-name').text())).toEqual(['Breast', 'Lung'])
+    expect(bars[0].find('.cl-lbar-n').text()).toBe('2')
+    expect(bars[0].attributes('title')).toBe('Breast: 2 cell lines, 1 measured in 2+ studies, 3 studies')
+    await bars[1].trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', lineage: 'Lung' })
+    expect(w.find('[data-test="lines-lineage"]').element.value).toBe('Lung')
+    expect(w.findAll('[data-test="line-row"]').map((r) => r.find('.cl-pt-gene').text())).toEqual(['A549'])
   })
 
   it('lists every cell line on the Cell line tab, with filters, and opens one', async () => {
@@ -459,6 +473,17 @@ describe('CellLines view', () => {
     expect(empty.find('a').attributes('href')).toContain('string-db.org')
     expect(empty.find('button').text()).toBe('Protein view for VIM →')
   })
+  it('suggests the proteins with the most partners when a gene has none', async () => {
+    respond({ '/genes/VIM/coexpression': { gene: 'VIM', partners: [], complexes: [], display_min_z: 4 } })
+    const { w, router } = await mountAt('/apps/cell-lines?tab=coexpression&gene=VIM')
+    const hubs = w.findAll('[data-test="coexp-hub"]')
+    expect(hubs.map((h) => h.find('b').text())).toEqual(['VIM'])
+    expect(apiGet.mock.calls.find((c) => c[1] === '/table')[2]).toMatchObject({ sort: 'coexpression', limit: 18, hide_flagged: 'true' })
+    await hubs[0].trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'coexpression', gene: 'VIM' })
+  })
+
 
   it('shows negative partners in their own colour (PSMB9)', async () => {
     const imm = ['20S immunoproteasome complex']

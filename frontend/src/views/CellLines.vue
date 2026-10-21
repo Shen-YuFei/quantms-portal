@@ -22,12 +22,12 @@
         <AtlasPicker id="cl-line" kind="line" label="Cell line" placeholder="Name, CVCL_ accession or DepMap ID, e.g. MCF7" @select="selectLine" />
       </section>
 
-      <OverviewTab v-if="tab === 'overview'" @select-gene="selectGene" />
+      <OverviewTab v-if="tab === 'overview'" @select-gene="selectGene" @select-lineage="(l) => setQuery({ tab: 'line', line: '', lineage: l })" />
       <ProteinTab v-else-if="tab === 'protein'" :gene="gene" :by="String(route.query.by || '')"
                   @update-by="(b) => setQuery({ by: b })"
                   @select-line="selectLine"
                   @select-gene="selectGene" @open-coexpression="(g) => setQuery({ tab: 'coexpression', gene: g })" />
-      <LineTab v-else-if="tab === 'line'" :line="line" @select-gene="selectGene" @select-line="selectLine" />
+      <LineTab v-else-if="tab === 'line'" :line="line" :lineage="String(route.query.lineage || '')" @select-gene="selectGene" @select-line="selectLine" />
       <CompareTab v-else-if="tab === 'compare'" v-bind="compareSel" :groups="groups.data.value || []"
                   @update="updateCompare" @select-gene="selectGene" @select-line="selectLine" />
       <CoexpressionTab v-else-if="tab === 'coexpression'" :gene="gene"
