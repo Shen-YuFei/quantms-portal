@@ -58,6 +58,15 @@
 
       <section class="cl-card">
         <div class="cl-card-head">
+          <h3>Expression profile across cell lines</h3>
+          <GroupToggle v-model="kind" />
+        </div>
+        <ExpressionProfile :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
+        <p class="cl-caption">Each bar is one cell line: its rank among the lines measured in the same study (0 = lowest, 1 = highest), averaged over studies. Grouped by {{ kindLabel }} in the order above; click a bar to open the line.</p>
+      </section>
+
+      <section class="cl-card">
+        <div class="cl-card-head">
           <h3>Per-study values</h3>
           <input v-model="valueFilter" class="cl-input cl-input-sm" type="search" placeholder="Filter by study or line" aria-label="Filter per-study values" />
         </div>
@@ -114,6 +123,7 @@ import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
 import GroupToggle from './GroupToggle.vue'
 import GroupDotPlot from './GroupDotPlot.vue'
+import ExpressionProfile from './ExpressionProfile.vue'
 import RnaPanel from './RnaPanel.vue'
 import NeighboursTable from './NeighboursTable.vue'
 
@@ -121,7 +131,7 @@ const props = defineProps({
   gene: { type: String, default: '' },
   by: { type: String, default: 'lineage' },
 })
-const emit = defineEmits(['select-gene', 'open-coexpression', 'update-by'])
+const emit = defineEmits(['select-gene', 'select-line', 'open-coexpression', 'update-by'])
 
 const examples = ['VIM', 'EPCAM', 'PSMA1']
 const PAGE = 50

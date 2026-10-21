@@ -149,6 +149,26 @@
 .cl-rho-mark { position: absolute; top: -4px; bottom: 0; width: 2px; margin-left: -1px; background: var(--indigo); }
 .cl-rho-ticks { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; }
 
+.cl-prof-scroll { overflow-x: auto; max-width: 100%; }
+.cl-prof { display: flex; align-items: flex-start; gap: 3px; padding-bottom: 4px; }
+.cl-prof-yaxis { flex: 0 0 24px; height: 140px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 0.7rem; color: var(--text-muted); padding-right: 3px; }
+.cl-prof-group { flex-basis: 0; min-width: 14px; display: flex; flex-direction: column; transition: opacity 0.12s; }
+.cl-prof:hover .cl-prof-group:not(:hover) { opacity: 0.35; }
+.cl-prof-bars {
+  display: flex; align-items: flex-end; height: 140px; border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px) 0 0 / 100% 50%;
+}
+.cl-bar { flex: 1 1 0; min-width: 1px; min-height: 2px; cursor: pointer; }
+.cl-bar-detected { background: var(--indigo); }
+.cl-bar-nocall { background: #cbd5e1; }
+.cl-bar-absent { background: transparent; box-shadow: inset 0 2px 0 #a5b4fc; }
+.cl-bar:hover { background: #312e81; }
+.cl-bar-key { border: 1px solid #a5b4fc; }
+.cl-prof-label {
+  writing-mode: vertical-rl; transform: rotate(180deg); align-self: center; max-height: 96px; margin-top: 4px;
+  font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-prof-group:hover .cl-prof-label { color: var(--text-primary); font-weight: 600; }
 .cl-nowrap { white-space: nowrap; }
 .cl-badge-complex { margin-left: 6px; background: rgba(124, 58, 237, 0.1); color: var(--violet); cursor: help; }
 .cl-row-ranked td { color: var(--text-secondary); }

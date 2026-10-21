@@ -145,6 +145,30 @@ describe('CellLines view', () => {
     expect(w.text()).toContain('Detection uses lines with a presence call; some studies provide abundance but no per-line presence call.')
   })
 
+  it('draws the expression profile as bars grouped like the dot plot and opens a line on click', async () => {
+    const lines = [...vim.lines,
+      { line: 'CVCL_0005', name: 'L4', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: 0.7, n_studies_measured: 1, n_studies_present: 1, n_studies_present_high: 0 },
+      { line: 'CVCL_0006', name: 'L5', lineage: 'Lung', primary_disease: 'NSCLC', l4_mean: null, n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0 }]
+    respond({ '/genes/VIM': { ...vim, lines } })
+    const { w, router } = await mountAt('/apps/cell-lines?gene=VIM')
+    const profile = w.find('[data-test="profile"]')
+    const groups = profile.findAll('[data-test="profile-group"]')
+    expect(groups.map((g) => g.find('.cl-prof-label').text())).toEqual(['Lung'])
+    const bars = groups[0].findAll('.cl-bar')
+    expect(bars.map((b) => [b.attributes('data-line'), b.classes().find((c) => c.startsWith('cl-bar-'))])).toEqual([
+      ['CVCL_0001', 'cl-bar-detected'], ['CVCL_0005', 'cl-bar-detected'], ['CVCL_0002', 'cl-bar-absent'], ['CVCL_0004', 'cl-bar-nocall']])
+    expect(bars[0].attributes('style')).toContain('height: 90%')
+    expect(bars[0].attributes('title')).toBe('L1 · Lung / NSCLC · rank 0.90 · detected')
+    const card = w.findAll('section.cl-card').find((c) => c.find('[data-test="profile"]').exists())
+    expect(card.text()).toContain('Each bar is one cell line: its rank among the lines measured in the same study (0 = lowest, 1 = highest), averaged over studies.')
+    expect(card.text()).not.toMatch(/\bTMT\b|\bDIA\b|\bDDA\b|plex\b/)
+    await w.find('[data-test="profile-toggle"]').trigger('click')
+    expect(w.findAll('[data-test="profile-group"]').map((g) => g.find('.cl-prof-label').text())).toEqual(['Lung', 'Breast'])
+    await bars[2].trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ tab: 'line', line: 'CVCL_0002' })
+  })
+
   it('reads and writes the grouping as by= in the URL', async () => {
     respond()
     const { w, router } = await mountAt('/apps/cell-lines?gene=VIM&by=disease')
