@@ -18,11 +18,11 @@
         <span class="cl-legend-item"><span class="cl-pt-key"></span>not detected</span>
       </span>
     </div>
-    <div v-if="!shown.length" class="cl-empty">No line has a rank and a presence call for this gene.</div>
+    <div v-if="!shown.length" class="cl-empty">No line has a position and a presence call for this gene.</div>
     <div v-else class="cl-box-scroll">
       <div class="cl-box-wrap" :style="{ width: `${W}px` }" @mouseleave="tip = null">
         <svg :viewBox="`0 0 ${W} ${H}`" :width="W" :height="H" class="cl-boxplot" role="img"
-             :aria-label="`Within-study rank by ${kind === 'lineage' ? 'lineage' : 'primary disease'}`" data-test="boxplot">
+             :aria-label="`Position among lines of the same studies, by ${kind === 'lineage' ? 'lineage' : 'primary disease'}`" data-test="boxplot">
           <g class="cl-box-axis">
             <template v-for="t in TICKS" :key="t">
               <line :x1="PAD_L" :x2="W - 4" :y1="y(t)" :y2="y(t)" class="cl-box-grid" />
@@ -41,7 +41,7 @@
             <line v-if="g.median != null" :x1="cx(i) - BOX_W / 2" :x2="cx(i) + BOX_W / 2" :y1="y(g.median)" :y2="y(g.median)" class="cl-box-median" />
             <circle v-for="(p, j) in g.points" :key="p.line" :cx="cx(i) + jitter(j)" :cy="y(p.l4_mean)" r="2.6"
                     class="cl-box-pt" :class="{ 'cl-pt-on': p.detected, 'cl-pt-ring': isHi(p) }" :data-line="p.line"
-                    @mouseenter="showTip(cx(i) + jitter(j), y(p.l4_mean), `${p.name} · rank ${fmt(p.l4_mean)}${p.detected ? '' : ' · not detected'}`)"
+                    @mouseenter="showTip(cx(i) + jitter(j), y(p.l4_mean), `${p.name} · above ${pct(p.l4_mean)} of lines in the same studies${p.detected ? '' : ' · not detected'}`)"
                     @click="$emit('select-line', p.line)" />
             <text :transform="`translate(${cx(i) + 4}, ${TOP + PLOT_H + 8}) rotate(-90)`" text-anchor="end" class="cl-box-label">
               <title>{{ g.value }}</title>{{ short(g.value) }}
@@ -59,7 +59,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { MIN_GROUP_LINES, groupBoxes, fmt, signed } from '../../cellLines.js'
+import { MIN_GROUP_LINES, groupBoxes, pct, signed } from '../../cellLines.js'
 
 const props = defineProps({
   lines: { type: Array, default: () => [] },
@@ -106,8 +106,8 @@ const showTip = (x, yy, text) => {
 }
 const boxTip = (g) => [
   `${g.value} · ${g.points.length} lines`,
-  g.median != null ? `median ${fmt(g.median)}` : '',
-  g.box ? `IQR ${fmt(g.box.q1)}–${fmt(g.box.q3)}` : '',
+  g.median != null ? `median ${pct(g.median)}` : '',
+  g.box ? `middle half ${pct(g.box.q1)}–${pct(g.box.q3)}` : '',
   g.enrichment != null ? `${signed(g.enrichment)} vs other lines in the same studies` : 'no within-study comparison',
   g.nocall ? `+${g.nocall} line${g.nocall === 1 ? '' : 's'} without a presence call, not shown` : '',
 ].filter(Boolean).join(' · ')

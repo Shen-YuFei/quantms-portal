@@ -14,7 +14,7 @@ export const GROUP_KINDS = [
   { id: 'lineage', label: 'Lineage' },
   { id: 'primary_disease', label: 'Primary disease' },
 ]
-export const L4_AXIS = 'Within-study rank (level 4)'
+export const L4_AXIS = 'Relative position among lines of the same studies (0 = lowest, 1 = highest)'
 
 const get = (path, params) => apiGet(CELL_LINES_BASE, path, params)
 
@@ -172,6 +172,43 @@ export function groupBoxes(lines, groups, kind = 'lineage') {
       small: g.small || points.length < MIN_GROUP_LINES,
     }
   }).filter((g) => g.points.length)
+}
+
+// Profile within one study ------------------------------------------------------
+
+/** Label of the profile estimator(s) a study's values come from. */
+export const methodLabel = (study) => (study?.methods || []).join(' / ') || 'unknown method'
+
+/**
+ * One study's lines grouped by lineage or disease. Points carry the line's log2 difference from the
+ * study average (l3); measured lines without a value are listed as not detected, never plotted as values.
+ */
+export function studyProfile(values, lines, study, kind = 'lineage') {
+  const meta = new Map((lines || []).map((l) => [l.line, l]))
+  const groups = new Map()
+  for (const v of values || []) {
+    if (v.study !== study) continue
+    const line = meta.get(v.line) || { line: v.line }
+    const key = line[kind] ?? 'unmapped'
+    if (!groups.has(key)) groups.set(key, { value: key, points: [], absent: [] })
+    const row = { line: v.line, name: line.name || v.line, lineage: line.lineage }
+    if (Number.isFinite(v.l3)) groups.get(key).points.push({ ...row, value: v.l3, detected: !!v.present, scope: v.presence_scope })
+    else groups.get(key).absent.push(row)
+  }
+  return [...groups.values()].map((g) => {
+    const vals = g.points.map((p) => p.value)
+    return { ...g, median: boxStats(vals)?.median ?? null, box: vals.length >= BOX_MIN_LINES ? tukeyBox(vals) : null }
+  }).sort((a, b) => (b.median ?? -Infinity) - (a.median ?? -Infinity) || b.points.length - a.points.length)
+}
+
+/** Symmetric log2 axis around the study average, in whole units. */
+export function profileAxis(groups) {
+  const vals = (groups || []).flatMap((g) => g.points.map((p) => p.value))
+  const m = Math.max(1, Math.ceil(Math.max(0, ...vals.map((v) => Math.abs(v)))))
+  const step = m > 6 ? 2 : 1
+  const ticks = []
+  for (let t = -m; t <= m; t += step) ticks.push(t)
+  return { min: -m, max: m, ticks }
 }
 
 // RNA reference ------------------------------------------------------------------

@@ -175,6 +175,16 @@
 .cl-box-tip.below { transform: translate(-50%, 10px); }
 .cl-pt-key { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #6366f1; }
 .cl-pt-key.cl-pt-on { background: rgba(79, 70, 229, 0.75); border-color: #312e81; }
+.cl-box-grid.cl-box-zero { stroke: var(--text-muted); stroke-dasharray: 3 3; }
+.cl-box-pt.cl-pt-absent { fill: var(--surface); stroke: var(--text-muted); stroke-dasharray: 1.5 1.5; }
+.cl-pt-key.cl-pt-absent { border-color: var(--text-muted); border-style: dashed; }
+.cl-howto { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: var(--bg-alt); font-size: 0.86rem; }
+.cl-howto summary { cursor: pointer; font-weight: 600; }
+.cl-howto dl { margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
+.cl-howto dt { font-weight: 600; }
+.cl-howto dd { margin: 0; color: var(--text-secondary); }
+.cl-study-row td { background: var(--bg-alt); font-weight: 600; }
+.cl-study-row .cl-muted { font-weight: 400; }
 .cl-nowrap { white-space: nowrap; }
 .cl-badge-complex { margin-left: 6px; background: rgba(124, 58, 237, 0.1); color: var(--violet); cursor: help; }
 .cl-row-ranked td { color: var(--text-secondary); }

@@ -39,7 +39,7 @@
             </tbody>
           </table>
         </div>
-        <p class="cl-caption">Values are corrected level 4 ({{ L4_AXIS.toLowerCase() }}); lines need not share a study.</p>
+        <p class="cl-caption">Values are each line's {{ L4_AXIS.toLowerCase() }}; lines need not share a study.</p>
       </section>
     </template>
 

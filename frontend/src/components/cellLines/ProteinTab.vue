@@ -1,7 +1,7 @@
 <template>
   <div>
     <div v-if="!gene" class="cl-notice">
-      Search for a gene to see where it is detected, how much there is by lineage and cancer type,
+      Search for a gene or protein (symbol, UniProt accession or name) to see where it is detected, how much there is by lineage and cancer type,
       and what it moves with. Try
       <button v-for="g in examples" :key="g" type="button" class="cl-linkish cl-example" @click="$emit('select-gene', g)">{{ g }}</button>
     </div>
@@ -15,6 +15,12 @@
           <span v-if="s.is_family" class="tag tag-violet" title="Protein-family row: shown on its own, never merged into a member gene">family</span>
           <span v-if="s.contamination_prone" class="tag tag-warning" title="Common contaminant-prone protein; interpret with care">contamination-prone</span>
         </div>
+        <p v-if="s.protein_name || s.accessions?.length" class="cl-muted" data-test="gene-protein">
+          {{ s.protein_name }}
+          <template v-for="acc in s.accessions || []" :key="acc">
+            · <a :href="`https://www.uniprot.org/uniprotkb/${acc}`" target="_blank" rel="noopener">{{ acc }}</a>
+          </template>
+        </p>
         <div class="cl-facts">
           <div class="cl-fact">
             <div class="cl-fact-label">Reliability (level 5)</div>
@@ -47,6 +53,20 @@
         </div>
       </section>
 
+      <details class="cl-howto" data-test="howto">
+        <summary>How to read this page</summary>
+        <dl>
+          <dt>Detected</dt>
+          <dd>The protein was identified in that line. TMT studies identify proteins per plex (a pool of 10–16 samples), not per line, so they never count as a line detection.</dd>
+          <dt>Profile within each study</dt>
+          <dd>How the protein varies across the lines of one study, as log2 difference from that study's average. DIA and label-free DDA use directLFQ; TMT uses piBAQ with IRS on the reference channel. Each study has its own scale.</dd>
+          <dt>Across studies</dt>
+          <dd>Where a line sits among the lines measured in the same studies, from 0 (lowest) to 1 (highest), averaged over studies. Measured lines where the protein was not detected count as lowest. This is the only view that combines studies.</dd>
+          <dt>Abundance in sample</dt>
+          <dd>log2 piBAQ: how abundant the protein is compared with other proteins in the same sample. Its scale differs between studies, so compare it only within a study.</dd>
+        </dl>
+      </details>
+
       <section class="cl-card">
         <div class="cl-card-head">
           <h3>Detection and abundance by {{ kindLabel }}</h3>
@@ -58,35 +78,52 @@
 
       <section class="cl-card">
         <div class="cl-card-head">
-          <h3>Expression profile across cell lines</h3>
+          <h3>Profile within each study</h3>
           <GroupToggle v-model="kind" />
         </div>
-        <GroupBoxPlot :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
-        <p class="cl-caption" data-test="box-caption">Each box summarises the lines of one group: their rank among lines measured in the same study (0 = lowest, 1 = highest), averaged over studies. Points are lines (filled = detected). Lines without a presence call are not shown. <template v-if="noCallLines">{{ noCallLines }} such line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or point for details; click a point to open the line.</p>
+        <StudyProfile :gene="gene" :values="d.values" :lines="d.lines" :studies="d.studies || []" :kind="kind"
+                      @select-line="(l) => $emit('select-line', l)" />
       </section>
 
       <section class="cl-card">
         <div class="cl-card-head">
-          <h3>Per-study values</h3>
+          <h3>Across studies: where each line sits</h3>
+          <GroupToggle v-model="kind" />
+        </div>
+        <GroupBoxPlot :lines="d.lines" :groups="d.groups" :kind="kind" @select-line="(l) => $emit('select-line', l)" />
+        <p class="cl-caption" data-test="box-caption">Each point is a line: the share of lines measured in the same studies that it is above (0 = lowest, 1 = highest), averaged over its studies. Measured lines where the protein was not detected count as lowest. Boxes summarise each group. Points are lines (filled = detected). Lines without a presence call are not shown. <template v-if="noCallLines">{{ noCallLines }} such line{{ noCallLines === 1 ? '' : 's' }} for this gene. </template>Hover a box or point for details; click a point to open the line.</p>
+      </section>
+
+      <section class="cl-card">
+        <div class="cl-card-head">
+          <h3>Values per study</h3>
           <input v-model="valueFilter" class="cl-input cl-input-sm" type="search" placeholder="Filter by study or line" aria-label="Filter per-study values" />
         </div>
-        <p class="cl-caption cl-warn">Level 1 (log2 piBAQ) is per study only and is not comparable across studies.</p>
+        <p class="cl-caption cl-warn">Each study has its own scale: compare values only between lines under the same study heading.</p>
         <div class="cl-table-wrap">
           <table class="cl-table" data-test="values-table">
             <thead>
-              <tr><th>Study</th><th>Line</th><th class="num">l1</th><th class="num">l3</th><th>Presence</th><th class="num">Peptides</th><th>Acq.</th><th>Comparability</th></tr>
+              <tr>
+                <th>Line</th>
+                <th class="num" title="log2 piBAQ: abundance compared with other proteins in the same sample">Abundance in sample (log2 piBAQ)</th>
+                <th class="num" title="log2 difference from the study average (TMT: plex average); from directLFQ, or piBAQ + IRS for TMT">Difference from study average (log2)</th>
+                <th>Detected</th><th class="num">Peptides</th><th>Comparable</th>
+              </tr>
             </thead>
             <tbody>
-              <tr v-for="v in pagedValues" :key="`${v.study}|${v.line}`">
-                <td>{{ v.study }}</td>
-                <td>{{ lineName[v.line] || v.line }}</td>
-                <td class="num">{{ fmt(v.l1) }}</td>
-                <td class="num">{{ fmt(v.l3) }}</td>
-                <td><span v-if="v.present && v.presence_scope === 'plex'" class="cl-badge cl-p-plex" title="TMT: identified in the plex; not specific to this channel">identified in plex</span><span v-else class="cl-badge" :class="`cl-p-${v.present_high ? 'high' : v.present ? 'detected' : 'absent'}`">{{ v.present_high ? '≥2 peptides' : v.present ? 'detected' : 'not detected' }}</span></td>
-                <td class="num">{{ v.n_pep ?? '—' }}</td>
-                <td>{{ v.acq || '—' }}</td>
-                <td><span v-if="v.comparability != null && v.comparability !== ''" class="cl-badge cl-badge-plain">{{ v.comparability }}</span><span v-else>—</span></td>
-              </tr>
+              <template v-for="v in pagedValues" :key="`${v.study}|${v.line}`">
+                <tr v-if="v.firstOfStudy" class="cl-study-row" data-test="study-row">
+                  <td colspan="6">{{ v.study }} <span class="cl-muted">· {{ v.acq || '—' }} · {{ methodLabel(studyMeta[v.study]) }}<template v-if="studyMeta[v.study]"> · {{ studyMeta[v.study].n_lines }} lines</template></span></td>
+                </tr>
+                <tr>
+                  <td>{{ lineName[v.line] || v.line }}</td>
+                  <td class="num">{{ fmt(v.l1) }}</td>
+                  <td class="num">{{ fmt(v.l3) }}</td>
+                  <td><span v-if="v.present && v.presence_scope === 'plex'" class="cl-badge cl-p-plex" title="TMT identifies proteins per plex (a pool of samples), not per line">in TMT plex, not per line</span><span v-else class="cl-badge" :class="`cl-p-${v.present_high ? 'high' : v.present ? 'detected' : 'absent'}`">{{ v.present_high ? 'yes, ≥2 peptides' : v.present ? 'yes' : 'no' }}</span></td>
+                  <td class="num">{{ v.n_pep ?? '—' }}</td>
+                  <td><span v-if="v.comparability" class="cl-badge cl-badge-plain" :title="COMPARABLE[v.comparability]?.title || v.comparability">{{ COMPARABLE[v.comparability]?.label || v.comparability }}</span><span v-else>—</span></td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -118,12 +155,13 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { getGene, getGeneRna, getGeneCoexpression, fmt, GROUP_KINDS, kindFromQuery, byParam, presenceState } from '../../cellLines.js'
+import { getGene, getGeneRna, getGeneCoexpression, fmt, GROUP_KINDS, kindFromQuery, byParam, presenceState, methodLabel } from '../../cellLines.js'
 import { useRequest } from './useRequest.js'
 import StatusBlock from './StatusBlock.vue'
 import GroupToggle from './GroupToggle.vue'
 import GroupDotPlot from './GroupDotPlot.vue'
 import GroupBoxPlot from './GroupBoxPlot.vue'
+import StudyProfile from './StudyProfile.vue'
 import RnaPanel from './RnaPanel.vue'
 import NeighboursTable from './NeighboursTable.vue'
 
@@ -135,6 +173,10 @@ const emit = defineEmits(['select-gene', 'select-line', 'open-coexpression', 'up
 
 const examples = ['VIM', 'EPCAM', 'PSMA1']
 const PAGE = 50
+const COMPARABLE = {
+  full: { label: 'across studies', title: 'This study covers several lineages; its lines can be compared with other studies' },
+  'within-lineage only': { label: 'within lineage only', title: 'Most lines in this study come from one lineage; compare them with other studies only within that lineage' },
+}
 const LINK_LABELS = { hpa_cell_line: 'HPA cell line', hpa_tissue: 'HPA tissue', uniprot: 'UniProt', depmap: 'DepMap', string: 'STRING' }
 
 const detail = useRequest(getGene)
@@ -162,7 +204,9 @@ const filteredValues = computed(() => {
   return rows.filter((v) => String(v.study).toUpperCase().includes(q) || String(v.line).toUpperCase().includes(q) ||
     String(lineName.value[v.line] || '').toUpperCase().includes(q))
 })
-const pagedValues = computed(() => filteredValues.value.slice(page.value * PAGE, (page.value + 1) * PAGE))
+const studyMeta = computed(() => Object.fromEntries((d.value?.studies || []).map((x) => [x.study, x])))
+const pagedValues = computed(() => filteredValues.value.slice(page.value * PAGE, (page.value + 1) * PAGE)
+  .map((v, i, rows) => ({ ...v, firstOfStudy: i === 0 || rows[i - 1].study !== v.study })))
 watch(valueFilter, () => { page.value = 0 })
 
 function load() {
