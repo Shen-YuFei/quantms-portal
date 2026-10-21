@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="cl-card">
-      <AtlasPicker id="cl-coexp-gene" kind="gene" label="Gene" placeholder="Gene symbol, e.g. PSMA1" @select="(g) => $emit('select-gene', g)" />
+      <AtlasPicker id="cl-coexp-gene" kind="gene" label="Gene or protein" placeholder="Gene, UniProt accession or protein name, e.g. PSMA1" @select="(g) => $emit('select-gene', g)" />
     </section>
     <div v-if="!gene" class="cl-notice">
       Pick a gene to see its strongest co-expression partners. Try

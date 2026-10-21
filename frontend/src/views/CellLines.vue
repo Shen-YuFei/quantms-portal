@@ -16,7 +16,7 @@
       </nav>
 
       <section v-if="tab === 'protein'" class="cl-card cl-pick-card">
-        <AtlasPicker id="cl-gene" kind="gene" label="Gene" placeholder="Gene symbol, e.g. VIM" @select="selectGene" />
+        <AtlasPicker id="cl-gene" kind="gene" label="Gene or protein" placeholder="Gene, UniProt accession or protein name, e.g. VIM, P08670" @select="selectGene" />
       </section>
       <section v-if="tab === 'line'" class="cl-card cl-pick-card">
         <AtlasPicker id="cl-line" kind="line" label="Cell line" placeholder="Name, CVCL_ accession or DepMap ID, e.g. MCF7" @select="selectLine" />

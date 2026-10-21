@@ -1,7 +1,7 @@
 <template>
   <div>
     <div v-if="!gene" class="cl-notice">
-      Search for a gene to see where it is detected, how much there is by lineage and cancer type,
+      Search for a gene or protein (symbol, UniProt accession or name) to see where it is detected, how much there is by lineage and cancer type,
       and what it moves with. Try
       <button v-for="g in examples" :key="g" type="button" class="cl-linkish cl-example" @click="$emit('select-gene', g)">{{ g }}</button>
     </div>
@@ -15,6 +15,12 @@
           <span v-if="s.is_family" class="tag tag-violet" title="Protein-family row: shown on its own, never merged into a member gene">family</span>
           <span v-if="s.contamination_prone" class="tag tag-warning" title="Common contaminant-prone protein; interpret with care">contamination-prone</span>
         </div>
+        <p v-if="s.protein_name || s.accessions?.length" class="cl-muted" data-test="gene-protein">
+          {{ s.protein_name }}
+          <template v-for="acc in s.accessions || []" :key="acc">
+            · <a :href="`https://www.uniprot.org/uniprotkb/${acc}`" target="_blank" rel="noopener">{{ acc }}</a>
+          </template>
+        </p>
         <div class="cl-facts">
           <div class="cl-fact">
             <div class="cl-fact-label">Reliability (level 5)</div>

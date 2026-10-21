@@ -18,6 +18,8 @@
         <button type="button" @mousedown.prevent @click="pick(s)">
           <template v-if="kind === 'gene'">
             <strong>{{ s.gene }}</strong>
+            <span v-if="s.protein_name" class="cl-muted">{{ s.protein_name }}</span>
+            <span v-if="s.match && s.match !== 'gene' && s.match !== 'protein_name'" class="cl-muted">matched {{ s.matched }}</span>
             <span class="cl-muted">{{ s.reliability_class || 'no reliability class' }} · detected in {{ s.n_lines_present ?? '—' }} / {{ s.n_lines_measured ?? '—' }} lines</span>
           </template>
           <template v-else>
@@ -27,7 +29,7 @@
         </button>
       </li>
     </ul>
-    <p v-if="noMatch" class="cl-no-match" role="status">No {{ kind === 'gene' ? 'gene' : 'cell line' }} matches “{{ query.trim() }}”.</p>
+    <p v-if="noMatch" class="cl-no-match" role="status">No {{ kind === 'gene' ? 'gene or protein' : 'cell line' }} matches “{{ query.trim() }}”.</p>
   </div>
 </template>
 
