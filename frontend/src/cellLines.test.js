@@ -218,9 +218,9 @@ describe('RNA reference', () => {
 
 describe('co-expression partners', () => {
   const partners = [
-    { partner: 'A', z: 8, validated: true, shared_complexes: ['26S proteasome'] },
+    { partner: 'A', z: 8, strong: true, shared_complexes: ['26S proteasome'] },
     { partner: 'B', z: 6, validated: true, shared_complexes: [] },
-    { partner: 'C', z: 4, validated: false, shared_complexes: ['26S proteasome'] },
+    { partner: 'C', z: 4, strong: false, shared_complexes: ['26S proteasome'] },
     { partner: 'D', z: -3, validated: false, shared_complexes: [] },
   ]
 
@@ -233,10 +233,10 @@ describe('co-expression partners', () => {
     expect(radialLayout([{ partner: 'N', z: -5 }, { partner: 'P', z: 4 }]).map((n) => n.partner)).toEqual(['P', 'N'])
   })
 
-  it('filters all, beyond shared complexes and validated only', () => {
+  it('filters all, beyond shared complexes and strong only (reading the older validated field too)', () => {
     expect(filterPartners(partners, 'all').map((p) => p.partner)).toEqual(['A', 'B', 'C', 'D'])
     expect(filterPartners(partners, 'beyond').map((p) => p.partner)).toEqual(['B', 'D'])
-    expect(filterPartners(partners, 'validated').map((p) => p.partner)).toEqual(['A', 'B'])
+    expect(filterPartners(partners, 'strong').map((p) => p.partner)).toEqual(['A', 'B'])
     expect(filterPartners(undefined, 'all')).toEqual([])
   })
 })

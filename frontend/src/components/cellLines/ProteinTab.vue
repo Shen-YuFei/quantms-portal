@@ -34,8 +34,12 @@
               <span v-if="s.spec_top3" class="cl-muted">· {{ s.spec_top3 }}</span>
             </div>
             <div class="cl-fact-sub">
-              <span v-if="s.spec_agreement != null">agreement {{ typeof s.spec_agreement === 'number' ? fmt(s.spec_agreement) : s.spec_agreement }}</span>
+              <span v-if="s.spec_robust != null">{{ s.spec_robust ? 'robust: both views agree, ≥ 2 studies' : 'not robust' }}</span>
               <span v-if="s.spec_lab_reproducible != null"> · {{ s.spec_lab_reproducible ? 'reproduced across labs' : 'not reproduced across labs' }}</span>
+            </div>
+            <div v-if="(s.spec_dropped || []).length" class="cl-fact-sub" data-test="spec-dropped">
+              Not shown: {{ s.spec_dropped.join('; ') }}<template v-if="s.spec_cat3_unguarded && s.spec_cat3_unguarded !== s.spec_cat3"> (unguarded call: {{ s.spec_cat3_unguarded }})</template>
+              · <router-link :to="{ query: { tab: 'methods' }, hash: '#specificity' }">why</router-link>
             </div>
           </div>
           <div class="cl-fact">

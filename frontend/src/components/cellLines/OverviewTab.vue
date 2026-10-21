@@ -14,7 +14,7 @@
         <section class="cl-card cl-ov-heat">
           <div class="cl-card-head">
             <h3>Lineage specificity map</h3>
-            <span class="cl-muted">{{ d.heatmap.length }} robust lineage markers, the strongest per lineage · click a row to list it below</span>
+            <span class="cl-muted">{{ d.heatmap.length }} robust lineage markers (≥ 10 lines, ≥ 2 studies agree), the strongest per lineage · click a row to list it below</span>
           </div>
           <LineageHeatmap :heatmap="d.heatmap" :lineages="d.lineages" @pick="pickMarker" />
         </section>
@@ -82,7 +82,7 @@ const tiles = computed(() => {
     tile(t.reproducible, 'reproducible between labs', 'the same cell line agrees across labs', '#15803d', { rels: ['reproducible'] }),
     tile(t.enriched, 'lineage / group enriched', `${fmtInt(t.enhanced)} more enhanced · ${fmtInt(t.robust)} robust calls`, '#6d28d9',
       { cats: ['lineage enriched', 'group enriched'] }),
-    tile(t.coexpression_links, 'co-expression links', `validated (|Z| ≥ 5) among ${fmtInt(t.coexpression_proteins)} proteins`, '#0369a1',
+    tile(t.coexpression_links, 'co-expression links', `strong (|Z| ≥ 5) among ${fmtInt(t.coexpression_proteins)} proteins`, '#0369a1',
       { sort: 'coexpression' }),
     tile(t.complexes, 'protein complexes', 'Complex Portal, with members in the atlas', '#7c3aed', { sort: 'complexes' }),
   ]
