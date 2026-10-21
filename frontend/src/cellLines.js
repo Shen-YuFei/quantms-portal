@@ -83,14 +83,6 @@ export function errorMessage(err, what = 'This item') {
 
 // Presence ------------------------------------------------------------------
 
-export const PRESENCE_STATES = [
-  { id: 'high', label: 'Detected, ≥2 peptides' },
-  { id: 'detected', label: 'Detected' },
-  { id: 'nocall', label: 'No presence call' },
-  { id: 'absent', label: 'Not detected' },
-  { id: 'unmeasured', label: 'Not measured' },
-]
-
 /** Presence state of one line × gene row from GET /genes/{gene}. */
 export function presenceState(row) {
   if (!row || !(row.n_studies_measured > 0)) return 'unmeasured'
@@ -98,15 +90,6 @@ export function presenceState(row) {
   if (row.n_studies_present > 0) return 'detected'
   if (row.n_studies_plex_identified > 0) return 'nocall'
   return 'absent'
-}
-
-export function presenceTooltip(row) {
-  const name = row.name || row.line
-  const n = row.n_studies_measured || 0
-  if (!n) return `${name}: not measured`
-  return `${name}: detected in ${row.n_studies_present || 0} of ${n} studies that measured it` +
-    ` (≥2 peptides in ${row.n_studies_present_high || 0})` +
-    (row.n_studies_plex_identified ? `; no per-line presence call in ${row.n_studies_plex_identified}` : '')
 }
 
 // Groups smaller than this are hidden by default (same minimum as specificity and compare).
@@ -174,11 +157,11 @@ export function tukeyBox(values) {
 }
 
 /**
- * Cross-study groups in dot-plot order. Points are lines with a mean difference from their studies'
- * averages (l3_mean); measured lines without a value are not detected (n.d.); lines without a presence
- * call are counted, not plotted.
+ * One summary row per group, in dot-plot order: detection rate and within-study enrichment (A49) from the API
+ * group summary, plus each line's amount (l3_mean) as points and measured-not-detected lines apart. Lines
+ * without a presence call are counted, not plotted.
  */
-export function groupBoxes(lines, groups, kind = 'lineage') {
+export function groupSummary(lines, groups, kind = 'lineage') {
   return groupDots(lines, groups, kind).map((g) => {
     const rows = g.rows.filter((r) => r.state !== 'nocall')
     const row = (r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease })
@@ -187,12 +170,11 @@ export function groupBoxes(lines, groups, kind = 'lineage') {
     const absent = rows.filter((r) => !Number.isFinite(r.l3_mean) && r.state === 'absent').map(row)
     const vals = points.map((p) => p.value)
     return {
-      value: g.value, enrichment: g.enrichment, points, absent, nocall: g.rows.filter((r) => r.state === 'nocall').length,
+      ...g, points, absent, nocall: g.rows.filter((r) => r.state === 'nocall').length,
       median: boxStats(vals)?.median ?? null,
       box: vals.length >= BOX_MIN_LINES ? tukeyBox(vals) : null,
-      small: g.small || points.length + absent.length < MIN_GROUP_LINES,
     }
-  }).filter((g) => g.points.length || g.absent.length)
+  })
 }
 
 /** A log2 difference in words: "2.0× the average" / "2.0× below the average". */
