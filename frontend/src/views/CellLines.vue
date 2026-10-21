@@ -24,6 +24,7 @@
 
       <ProteinTab v-if="tab === 'protein'" :gene="gene" :by="String(route.query.by || '')"
                   @update-by="(b) => setQuery({ by: b })"
+                  @select-line="selectLine"
                   @select-gene="selectGene" @open-coexpression="(g) => setQuery({ tab: 'coexpression', gene: g })" />
       <LineTab v-else-if="tab === 'line'" :line="line" @select-gene="selectGene" />
       <CompareTab v-else-if="tab === 'compare'" v-bind="compareSel" :groups="groups.data.value || []"

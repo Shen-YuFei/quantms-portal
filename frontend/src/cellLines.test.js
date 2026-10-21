@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   compareParams, compare, presenceState, presenceTooltip, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout,
+  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, profileBars,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -136,6 +136,15 @@ describe('group dot plot', () => {
     expect(rows.map((r) => r.value)).toEqual(['Breast', 'Lung', 'Skin', 'Bone'])
     expect(rows.map((r) => r.small)).toEqual([false, false, true, true])
     expect(groupDots(lines, groups, 'primary_disease').map((r) => r.value)).toEqual(['IDC'])
+  })
+
+  it('builds profile bars in dot-plot group order, highest rank first, nulls omitted', () => {
+    const bars = profileBars(lines, groups, 'lineage')
+    expect(bars.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true]])
+    const lung = bars.find((g) => g.value === 'Lung')
+    expect(lung.bars.map((b) => [b.line, b.state])).toEqual([['L1', 'detected'], ['L2', 'detected'], ['L3', 'nocall'], ['L4', 'absent']])
+    expect(bars.flatMap((g) => g.bars).some((b) => b.line === 'L5')).toBe(false)
+    expect(bars.find((g) => g.value === 'Breast').bars.map((b) => b.l4_mean)).toEqual([0.95, 0.85, 0.75])
   })
 
   it('maps the by= URL param to a group kind and back', () => {

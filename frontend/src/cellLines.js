@@ -145,6 +145,23 @@ export function groupDots(lines, groups, kind = 'lineage') {
     (b.enrichment ?? 0) - (a.enrichment ?? 0) || b.n_lines - a.n_lines)
 }
 
+export const PROFILE_STATES = [
+  { id: 'detected', label: 'Detected' },
+  { id: 'nocall', label: 'No presence call' },
+  { id: 'absent', label: 'Not detected' },
+]
+const PROFILE_STATE = { high: 'detected', detected: 'detected', nocall: 'nocall', absent: 'absent' }
+
+/** Bar-profile groups in dot-plot order; bars are lines with a level 4 value, highest first. */
+export function profileBars(lines, groups, kind = 'lineage') {
+  return groupDots(lines, groups, kind).map((g) => ({
+    value: g.value, small: g.small,
+    bars: g.rows.filter((r) => Number.isFinite(r.l4_mean))
+      .map((r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease, l4_mean: r.l4_mean, state: PROFILE_STATE[r.state] }))
+      .sort((x, y) => y.l4_mean - x.l4_mean),
+  })).filter((g) => g.bars.length)
+}
+
 // RNA reference ------------------------------------------------------------------
 
 export const RNA_STATES = [
