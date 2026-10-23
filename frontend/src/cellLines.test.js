@@ -3,7 +3,7 @@ import {
   studyProfile,
   compareParams, compare, presenceState, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
-  detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupSummary, tukeyBox,
+  detectedScatter, rule, decisionList, RULE_DEFAULTS, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupSummary, tukeyBox,
 } from './cellLines.js'
 import { ApiError } from './api.js'
 
@@ -146,7 +146,7 @@ describe('group dot plot', () => {
   })
 
   it('builds summary rows in dot-plot order: detection, enrichment, amounts; not-detected apart; no-call lines left out', () => {
-    const boxes = groupSummary(lines, groups, 'lineage')
+    const boxes = groupSummary(lines, groups, 'lineage', 3)
     expect(boxes.map((g) => [g.value, g.small])).toEqual([['Breast', false], ['Lung', false], ['Skin', true], ['Bone', true]])
     expect(boxes.find((g) => g.value === 'Lung')).toMatchObject({ n_called: 4, n_detected: 2, frac: 0.5, enrichment: 0.12 })
     const lung = boxes.find((g) => g.value === 'Lung')
@@ -269,5 +269,32 @@ describe('studyProfile identity', () => {
     const values = [{ study: 'S1', line: 'L1', l3: 0.5, present: true, lineage: 'Bowel', name: 'HT-29' }]
     const groups = studyProfile(values, [], 'S1', 'lineage')
     expect(groups.map((g) => g.value)).toEqual(['Bowel'])
+  })
+})
+
+describe('manifest rules and decisions', () => {
+  it('uses manifest rules', () => {
+    expect(rule({ rules: { min_group_lines: 4 } }, 'min_group_lines')).toBe(4)
+  })
+  it('uses decisions block', () => {
+    expect(rule({ decisions: { MAX_COMPARE_LINES: { value: 6 } } }, 'max_compare_lines')).toBe(6)
+  })
+  it('uses fallback when manifest lacks rules', () => {
+    expect(rule(null, 'min_group_lines')).toBe(3)
+    expect(rule({}, 'max_compare_lines')).toBe(5)
+    expect(RULE_DEFAULTS).toEqual({ min_group_lines: 3, max_compare_lines: 5 })
+  })
+  it('decisionList builds links', () => {
+    const list = decisionList({ decisions: {
+      B: { value: 1, decision: 'DR-016', version: '0.1', status: 'draft', file: 'DR-016-group-views.md' },
+      A: { value: 2, decision: 'DR-016', version: null, status: null, file: null },
+      C: { value: 3, decision: 'DR-002', file: 'DR-002-x.md' } } })
+    expect(list.map((d) => d.constant)).toEqual(['C', 'A', 'B'])
+    expect(list[2].url).toMatch(/docs\/decisions\/DR-016-group-views\.md$/)
+    expect(list[1].url).toBeNull()
+    expect(decisionList({})).toEqual([])
+  })
+  it('compareParams honours maxLines', () => {
+    expect(compareParams({ mode: 'lines', lines: ['a', 'b', 'c', 'd', 'e', 'f'], maxLines: 6 })).not.toBeNull()
   })
 })
