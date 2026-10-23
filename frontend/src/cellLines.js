@@ -203,7 +203,8 @@ export function studyProfile(values, lines, study, kind = 'lineage') {
   const groups = new Map()
   for (const v of values || []) {
     if (v.study !== study) continue
-    const line = meta.get(v.line) || { line: v.line }
+    // lines without a cross-study rank are absent from `lines`; the value row carries their identity
+    const line = meta.get(v.line) || { line: v.line, name: v.name, lineage: v.lineage, primary_disease: v.primary_disease }
     const key = line[kind] ?? 'unmapped'
     if (!groups.has(key)) groups.set(key, { value: key, points: [], absent: [] })
     const row = { line: v.line, name: line.name || v.line, lineage: line.lineage }

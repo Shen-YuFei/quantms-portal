@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  studyProfile,
   compareParams, compare, presenceState, errorMessage, tabFromQuery, listFromQuery, boxStats,
   sortRows, getGene, getDatasets, searchLines, groupDots, kindFromQuery, byParam, rnaVerdict, rnaByDetection,
   detectedScatter, filterPartners, accessionUrl, enrichmentColor, signed, radialLayout, groupSummary, tukeyBox,
@@ -260,5 +261,13 @@ describe('lines without a per-line presence call', () => {
     const row = { name: 'X', n_studies_measured: 1, n_studies_present: 0, n_studies_present_high: 0, n_studies_plex_identified: 1 }
     expect(presenceState(row)).toBe('nocall')
     expect(presenceState({ ...row, n_studies_measured: 2, n_studies_present: 1 })).toBe('detected')
+  })
+})
+
+describe('studyProfile identity', () => {
+  it('groups a line missing from the ranked list by the lineage on its value row', () => {
+    const values = [{ study: 'S1', line: 'L1', l3: 0.5, present: true, lineage: 'Bowel', name: 'HT-29' }]
+    const groups = studyProfile(values, [], 'S1', 'lineage')
+    expect(groups.map((g) => g.value)).toEqual(['Bowel'])
   })
 })
