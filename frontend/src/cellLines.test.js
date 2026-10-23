@@ -284,14 +284,17 @@ describe('manifest rules and decisions', () => {
     expect(rule({}, 'max_compare_lines')).toBe(5)
     expect(RULE_DEFAULTS).toEqual({ min_group_lines: 3, max_compare_lines: 5 })
   })
-  it('decisionList builds links', () => {
+  it('decisionList builds links only with a public base', () => {
     const list = decisionList({ decisions: {
       B: { value: 1, title: 'Group views', decision: 'DR-016', version: '0.1', status: 'draft', file: 'DR-016-group-views.md' },
       A: { value: 2, decision: 'DR-016', version: null, status: null, file: null },
       C: { value: 3, decision: 'DR-002', file: 'DR-002-x.md' } } })
     expect(list.map((d) => d.constant)).toEqual(['C', 'A', 'B'])
-    expect(list[2].url).toMatch(/docs\/decisions\/DR-016-group-views\.md$/)
-    expect(list[1].url).toBeNull()
+    expect(list.every((d) => d.url === null)).toBe(true)
+    const linked = decisionList({ decisions: { B: { decision: 'DR-016', file: 'DR-016-group-views.md' }, A: { decision: 'DR-016', file: null } } }, 'https://x.org/d/')
+    expect(linked.find((d) => d.constant === 'B').url).toBe('https://x.org/d/DR-016-group-views.md')
+    expect(linked.find((d) => d.constant === 'A').url).toBeNull()
+    expect(decisionList({ decisions: { B: { decision: 'DR-016', file: 'f.md' } } }, '')[0].url).toBeNull()
     expect(list[2].title).toBe('Group views')
     expect(list[1].title).toBeNull()
     expect(decisionList({})).toEqual([])

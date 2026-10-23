@@ -7,12 +7,13 @@ export const RULE_DEFAULTS = { min_group_lines: 3, max_compare_lines: 5 }
 export const rule = (manifest, key) =>
   manifest?.rules?.[key] ?? manifest?.decisions?.[key.toUpperCase()]?.value ?? RULE_DEFAULTS[key]
 
-const DECISIONS_URL = 'https://github.com/bigbio/quantms-portal-backend/blob/main/docs/decisions/'
+/** Public base URL of the decision records; null while the repository is private. */
+export const DECISIONS_BASE_URL = null
 /** Decisions applied to the export, sorted by decision id then constant. */
-export function decisionList(manifest) {
+export function decisionList(manifest, base = DECISIONS_BASE_URL) {
   return Object.entries(manifest?.decisions || {}).map(([constant, d]) => ({
     constant, value: d?.value, title: d?.title ?? null, decision: d?.decision ?? null, version: d?.version ?? null, status: d?.status ?? null,
-    url: d?.file ? DECISIONS_URL + d.file : null,
+    url: d?.file && typeof base === 'string' && base ? base + d.file : null,
   })).sort((a, b) => String(a.decision).localeCompare(String(b.decision)) || a.constant.localeCompare(b.constant))
 }
 
