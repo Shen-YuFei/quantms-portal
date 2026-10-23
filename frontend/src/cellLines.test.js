@@ -286,12 +286,14 @@ describe('manifest rules and decisions', () => {
   })
   it('decisionList builds links', () => {
     const list = decisionList({ decisions: {
-      B: { value: 1, decision: 'DR-016', version: '0.1', status: 'draft', file: 'DR-016-group-views.md' },
+      B: { value: 1, title: 'Group views', decision: 'DR-016', version: '0.1', status: 'draft', file: 'DR-016-group-views.md' },
       A: { value: 2, decision: 'DR-016', version: null, status: null, file: null },
       C: { value: 3, decision: 'DR-002', file: 'DR-002-x.md' } } })
     expect(list.map((d) => d.constant)).toEqual(['C', 'A', 'B'])
     expect(list[2].url).toMatch(/docs\/decisions\/DR-016-group-views\.md$/)
     expect(list[1].url).toBeNull()
+    expect(list[2].title).toBe('Group views')
+    expect(list[1].title).toBeNull()
     expect(decisionList({})).toEqual([])
   })
   it('compareParams honours maxLines', () => {

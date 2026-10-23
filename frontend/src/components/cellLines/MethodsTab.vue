@@ -140,7 +140,7 @@
         <h4>Decisions applied</h4>
         <ul class="cl-methods-list" data-test="decisions">
           <li v-for="d in decisions" :key="d.constant">
-            <a v-if="d.url" :href="d.url" target="_blank" rel="noopener">{{ d.decision }}</a><template v-else>{{ d.decision }}</template>:
+            <a v-if="d.url" :href="d.url" target="_blank" rel="noopener">{{ d.decision }}<template v-if="d.title"> — {{ d.title }}</template></a><template v-else>{{ d.decision }}<template v-if="d.title"> — {{ d.title }}</template></template>:
             {{ d.constant }} = {{ d.value }}<span class="cl-muted"> · v{{ d.version ?? '—' }} · {{ d.status ?? '—' }}</span>
           </li>
         </ul>

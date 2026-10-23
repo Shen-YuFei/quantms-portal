@@ -11,7 +11,7 @@ const DECISIONS_URL = 'https://github.com/bigbio/quantms-portal-backend/blob/mai
 /** Decisions applied to the export, sorted by decision id then constant. */
 export function decisionList(manifest) {
   return Object.entries(manifest?.decisions || {}).map(([constant, d]) => ({
-    constant, value: d?.value, decision: d?.decision ?? null, version: d?.version ?? null, status: d?.status ?? null,
+    constant, value: d?.value, title: d?.title ?? null, decision: d?.decision ?? null, version: d?.version ?? null, status: d?.status ?? null,
     url: d?.file ? DECISIONS_URL + d.file : null,
   })).sort((a, b) => String(a.decision).localeCompare(String(b.decision)) || a.constant.localeCompare(b.constant))
 }
