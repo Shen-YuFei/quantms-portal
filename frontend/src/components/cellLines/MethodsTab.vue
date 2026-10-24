@@ -136,6 +136,15 @@
         Sources: DepMap {{ m.sources?.depmap?.release || '—' }} ({{ m.sources?.depmap?.licence || '—' }}); HPA cell-line RNA
         ({{ m.sources?.hpa_rna_celline?.licence || '—' }}).
       </p>
+      <template v-if="decisions.length">
+        <h4>Decisions applied<template v-if="anyDraft"> (draft)</template></h4>
+        <ul class="cl-methods-list" data-test="decisions">
+          <li v-for="d in decisions" :key="d.constant">
+            <a v-if="d.url" :href="d.url" target="_blank" rel="noopener">{{ d.decision }}<template v-if="d.title"> — {{ d.title }}</template></a><template v-else>{{ d.decision }}<template v-if="d.title"> — {{ d.title }}</template></template>:
+            {{ d.constant }} = {{ shown(d.value) }}<span class="cl-muted"> · v{{ d.version ?? '—' }} · {{ d.status ?? '—' }}</span>
+          </li>
+        </ul>
+      </template>
       <p class="cl-caption">
         Key references: Gonçalves et al., Cancer Cell 2022 (ProCan); Nusinow et al., Cell 2020 (CCLE proteomics); Uhlén et al.,
         Science 2015 (HPA categories); Dai et al., Nature Methods 2024 (quantms).
@@ -146,10 +155,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { decisionList } from '../../cellLines.js'
 
 const props = defineProps({ manifest: { type: Object, default: null } })
 const m = computed(() => props.manifest || {})
 const r = computed(() => m.value.rules || {})
 const built = computed(() => (m.value.built ? String(m.value.built).slice(0, 10) : '—'))
+const decisions = computed(() => decisionList(props.manifest))
+const anyDraft = computed(() => decisions.value.some((d) => d.status === 'draft'))
+const shown = (v) => (Array.isArray(v) ? `${v.length} entries` : v && typeof v === 'object' ? `${Object.keys(v).length} entries` : v)
 const excluded = computed(() => m.value.excluded_studies?.studies || [])
 </script>

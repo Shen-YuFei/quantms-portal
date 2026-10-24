@@ -10,7 +10,7 @@
     <template v-if="mode === 'lines'">
       <section class="cl-card">
         <div class="cl-compare-pick">
-          <AtlasPicker v-if="lines.length < MAX_COMPARE_LINES" id="cl-compare-line" kind="line" :label="`Add a cell line (${lines.length}/${MAX_COMPARE_LINES})`"
+          <AtlasPicker v-if="lines.length < maxLines" id="cl-compare-line" kind="line" :label="`Add a cell line (${lines.length}/${maxLines})`"
                        placeholder="e.g. MCF7, A549, CVCL_0023" @select="addLine" />
           <div class="cl-chips">
             <span v-for="l in lines" :key="l" class="cl-chip">
@@ -19,11 +19,11 @@
             </span>
           </div>
         </div>
-        <p v-if="lines.length < 2" class="cl-muted">Pick 2 to {{ MAX_COMPARE_LINES }} lines to compare: type a name, or tick them in the list below.</p>
+        <p v-if="lines.length < 2" class="cl-muted">Pick 2 to {{ maxLines }} lines to compare: type a name, or tick them in the list below.</p>
       </section>
       <details class="cl-card cl-browse" :open="lines.length < 2" data-test="compare-browse">
         <summary>Pick cell lines from the list<span class="cl-muted"> · filter by lineage, cancer type or acquisition</span></summary>
-        <LineBrowser selectable :selected="lines" :max="MAX_COMPARE_LINES" @toggle="toggleLine" @open="(l) => $emit('select-line', l)" />
+        <LineBrowser selectable :selected="lines" :max="maxLines" @toggle="toggleLine" @open="(l) => $emit('select-line', l)" />
       </details>
       <StatusBlock :loading="req.loading.value" :error="req.error.value" what="This comparison" :retry="load" />
       <section v-if="lineResult" class="cl-card">
@@ -136,7 +136,7 @@ import StatusBlock from './StatusBlock.vue'
 import { useRequest } from './useRequest.js'
 import LineBrowser from './LineBrowser.vue'
 import {
-  MAX_COMPARE_LINES, GROUP_KINDS, compare, compareParams, fmt, pct, signed, amountColor, reliabilityStyle,
+  rule, GROUP_KINDS, compare, compareParams, fmt, pct, signed, amountColor, reliabilityStyle,
 } from '../../cellLines.js'
 
 const props = defineProps({
@@ -146,13 +146,15 @@ const props = defineProps({
   a: { type: String, default: '' },
   b: { type: String, default: '' },
   groups: { type: Array, default: () => [] },
+  manifest: { type: Object, default: null },
 })
 const emit = defineEmits(['update', 'select-gene', 'select-line'])
 
 const req = useRequest(compare)
 const reproducibleOnly = ref(true)
+const maxLines = computed(() => rule(props.manifest, 'max_compare_lines'))
 const selection = computed(() => ({ mode: props.mode, lines: props.lines, group: props.group, a: props.a, b: props.b,
-  reproducibleOnly: reproducibleOnly.value }))
+  reproducibleOnly: reproducibleOnly.value, maxLines: maxLines.value }))
 const paramsKey = computed(() => JSON.stringify(compareParams(selection.value)))
 
 // DuckDB MAP columns may arrive as {key: [...], value: [...]} instead of a plain object.
@@ -209,7 +211,7 @@ const update = (patch) => emit('update', patch)
 function setMode(mode) { if (mode !== props.mode) update({ mode }) }
 function addLine(line, item) {
   if (item?.name) picked.value = { ...picked.value, [line]: item.name }
-  if (!props.lines.includes(line)) update({ lines: [...props.lines, line].slice(0, MAX_COMPARE_LINES) })
+  if (!props.lines.includes(line)) update({ lines: [...props.lines, line].slice(0, maxLines.value) })
 }
 function removeLine(line) { update({ lines: props.lines.filter((l) => l !== line) }) }
 function toggleLine(line, row) { if (props.lines.includes(line)) removeLine(line); else addLine(line, row) }

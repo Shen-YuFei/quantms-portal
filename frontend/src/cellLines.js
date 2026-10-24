@@ -2,7 +2,21 @@
 import { apiGet, buildQuery, encodePath } from './api.js'
 import { CELL_LINES_BASE } from './config.js'
 
-export const MAX_COMPARE_LINES = 5
+// Fallbacks when the manifest carries no rules or decisions (older exports).
+export const RULE_DEFAULTS = { min_group_lines: 3, max_compare_lines: 5 }
+export const rule = (manifest, key) =>
+  manifest?.rules?.[key] ?? manifest?.decisions?.[key.toUpperCase()]?.value ?? RULE_DEFAULTS[key]
+
+/** Public base URL of the decision records; null while the repository is private. */
+export const DECISIONS_BASE_URL = null
+/** Decisions applied to the export, sorted by decision id then constant. */
+export function decisionList(manifest, base = DECISIONS_BASE_URL) {
+  return Object.entries(manifest?.decisions || {}).map(([constant, d]) => ({
+    constant, value: d?.value, title: d?.title ?? null, decision: d?.decision ?? null, version: d?.version ?? null, status: d?.status ?? null,
+    url: d?.file && typeof base === 'string' && base ? base + d.file : null,
+  })).sort((a, b) => String(a.decision).localeCompare(String(b.decision)) || a.constant.localeCompare(b.constant))
+}
+
 export const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'protein', label: 'Protein' },
@@ -45,13 +59,13 @@ export const getGroups = () => get('/groups').then((r) => r.groups || [])
 export const getDatasets = () => get('/datasets').then((r) => r.studies || [])
 
 /** Query params for GET /compare, or null when the selection is incomplete. */
-export function compareParams({ mode, lines, group, a, b, reproducibleOnly } = {}) {
+export function compareParams({ mode, lines, group, a, b, reproducibleOnly, maxLines = RULE_DEFAULTS.max_compare_lines } = {}) {
   if (mode === 'groups') {
     if (!GROUP_KINDS.some((g) => g.id === group) || !a || !b || a === b) return null
     return { group, a, b, background: true }
   }
   const picked = [...new Set((lines || []).filter(Boolean))]
-  if (picked.length < 2 || picked.length > MAX_COMPARE_LINES) return null
+  if (picked.length < 2 || picked.length > maxLines) return null
   return reproducibleOnly ? { lines: picked.join(','), reproducible_only: true } : { lines: picked.join(',') }
 }
 
@@ -99,8 +113,6 @@ export function presenceState(row) {
   return 'absent'
 }
 
-// Groups smaller than this are hidden by default (same minimum as specificity and compare).
-export const MIN_GROUP_LINES = 3
 // Quartiles need at least this many lines.
 export const BOX_MIN_LINES = 5
 
@@ -127,7 +139,7 @@ export function boxStats(values) {
  * Dot-plot rows from the API group summary (A49): within-study enrichment vs the other lines of the
  * same studies, detection among lines with a presence call; per-line rows feed the expanded strip.
  */
-export function groupDots(lines, groups, kind = 'lineage') {
+export function groupDots(lines, groups, kind = 'lineage', minGroupLines = RULE_DEFAULTS.min_group_lines) {
   const byValue = new Map()
   for (const row of lines || []) {
     const state = presenceState(row)
@@ -146,7 +158,7 @@ export function groupDots(lines, groups, kind = 'lineage') {
       n_lines: g.n_lines ?? rows.length, n_studies: g.n_studies ?? null,
       frac: g.n_called > 0 ? (g.n_detected || 0) / g.n_called : null,
       box: l4.length >= BOX_MIN_LINES ? boxStats(l4) : null,
-      small: enrichment === null || (g.n_lines ?? rows.length) < MIN_GROUP_LINES,
+      small: enrichment === null || (g.n_lines ?? rows.length) < minGroupLines,
     }
   })
   return out.sort((a, b) => a.small - b.small || (a.enrichment === null) - (b.enrichment === null) ||
@@ -169,8 +181,8 @@ export function tukeyBox(values) {
  * group summary, plus each line's amount (l3_mean) as points and measured-not-detected lines apart. Lines
  * without a presence call are counted, not plotted.
  */
-export function groupSummary(lines, groups, kind = 'lineage') {
-  return groupDots(lines, groups, kind).map((g) => {
+export function groupSummary(lines, groups, kind = 'lineage', minGroupLines = RULE_DEFAULTS.min_group_lines) {
+  return groupDots(lines, groups, kind, minGroupLines).map((g) => {
     const rows = g.rows.filter((r) => r.state !== 'nocall')
     const row = (r) => ({ line: r.line, name: r.name || r.line, lineage: r.lineage, primary_disease: r.primary_disease })
     const points = rows.filter((r) => Number.isFinite(r.l3_mean))

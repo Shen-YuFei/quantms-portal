@@ -51,14 +51,14 @@
       </div>
     </div>
     <button v-if="hidden" type="button" class="cl-linkbtn" data-test="gs-toggle" @click="showAll = !showAll">
-      {{ showAll ? 'Hide' : 'Show' }} {{ hidden }} {{ hidden === 1 ? 'group' : 'groups' }} with fewer than {{ MIN_GROUP_LINES }} cell lines or no within-study comparison
+      {{ showAll ? 'Hide' : 'Show' }} {{ hidden }} {{ hidden === 1 ? 'group' : 'groups' }} with fewer than {{ minGroupLines }} cell lines or no within-study comparison
     </button>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { MIN_GROUP_LINES, GROUP_KINDS, groupSummary, profileAxis, enrichmentColor, signed } from '../../cellLines.js'
+import { rule, GROUP_KINDS, groupSummary, profileAxis, enrichmentColor, signed } from '../../cellLines.js'
 import AmountStrip from './AmountStrip.vue'
 
 const props = defineProps({
@@ -66,6 +66,7 @@ const props = defineProps({
   lines: { type: Array, default: () => [] },
   groups: { type: Array, default: () => [] },
   kind: { type: String, default: 'lineage' },
+  manifest: { type: Object, default: null },
 })
 defineEmits(['select-line'])
 
@@ -74,7 +75,8 @@ const hiQuery = ref('')
 watch(() => props.kind, () => { showAll.value = false })
 
 const kindLabel = computed(() => GROUP_KINDS.find((k) => k.id === props.kind)?.label.toLowerCase() || props.kind)
-const rows = computed(() => groupSummary(props.lines, props.groups, props.kind))
+const minGroupLines = computed(() => rule(props.manifest, 'min_group_lines'))
+const rows = computed(() => groupSummary(props.lines, props.groups, props.kind, minGroupLines.value))
 const shown = computed(() => (showAll.value ? rows.value : rows.value.filter((g) => !g.small)))
 const hidden = computed(() => rows.value.filter((g) => g.small).length)
 const anyAmount = computed(() => rows.value.some((g) => g.points.length))
