@@ -4,7 +4,7 @@
 // by a `ref` of the form "{accession}/{phash}" (e.g. MSV000085836/8e4c044b513d),
 // URL-encoded via encodePath. All calls are read-only GETs.
 
-import { apiGet, encodePath } from './api.js'
+import { apiGet, apiPost, encodePath } from './api.js'
 import { QPX_BASE } from './config.js'
 
 // Catalogue of the curated DuckDB queries (ids, parameters) the backend allow-lists.
@@ -45,3 +45,14 @@ export const qpxPsms = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath
 // Run a curated query by id (allow-listed on the backend).
 export const qpxRunQuery = (ref, queryId, params) =>
   apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/query/${queryId}`, params)
+
+// Expose each available view's columns+types (backing the SQL editor / LLM).
+export const qpxSchema = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/schema`)
+
+// Run a free-form, SELECT-only DuckDB statement (validated + confined backend-side).
+export const qpxRunSql = (ref, { sql, limit }) =>
+  apiPost(QPX_BASE, `/datasets/${encodePath(ref)}/sql`, { sql, limit })
+
+// Ask the backend LLM to translate a natural-language question to DuckDB SQL and run it.
+export const qpxFromNl = (ref, { question, limit }) =>
+  apiPost(QPX_BASE, `/datasets/${encodePath(ref)}/sql/from_nl`, { question, limit })
