@@ -37,7 +37,10 @@ feature intensity), and run a curated gallery of DuckDB queries (PSMs per run,
 charge-state and q-value distributions, decoy rate, top protein groups).
 
 All reads are on-demand DuckDB with column projection and a hot in-memory query
-cache, so exploration stays fast. Trigger it for a specific dataset from that
+cache, so exploration stays fast. Reads are also **schema-aware and degrade
+gracefully**: a dataset missing an optional table (no `sample`/`psm`, no PTM
+annotation) shows empty tabs rather than errors, so the app works across
+heterogeneous qpx files. Trigger it for a specific dataset from that
 dataset's page → *Downloads → “🧪 Explore with DuckDB”* (or deep-link with
 `?ref=accession/phash`). [Open the app →](/apps/qpx-explore)
 
