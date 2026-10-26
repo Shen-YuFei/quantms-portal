@@ -348,6 +348,13 @@
 
         <!-- Queries tab: SQL editor -->
         <div v-else-if="tab === 'queries'" class="qx-tab-body">
+          <div v-if="schemaViews.length" class="qx-builder">
+            <div class="qx-block-label">Build a query</div>
+            <p class="qx-hint">Pick a table, filters and summaries; each change rewrites the SQL below.</p>
+            <QpxQueryBuilder :key="visibleRef" :views="schemaViews" @sql="onBuilderSql" />
+          </div>
+          <p v-else-if="schemaLoading" class="muted">Loading tables…</p>
+
           <div class="qx-sql-box">
             <div class="qx-block-label">SQL editor (DuckDB · read-only SELECT)</div>
             <textarea
@@ -362,9 +369,6 @@
               <input v-model.number="sqlLimit" type="number" min="1" :max="sqlMaxRows" class="qx-input qx-input-sm" />
               <button class="page-btn primary" :disabled="sqlRunning || !sqlText.trim()" @click="runSql">
                 {{ sqlRunning ? 'Running…' : 'Run' }}
-              </button>
-              <button class="page-btn" :disabled="schemaLoading" @click="loadSchema">
-                {{ schemaLoading ? 'Loading…' : 'Show columns' }}
               </button>
               <span class="muted qx-sql-hint">SELECT-only · confined to this dataset · max {{ sqlMaxRows }} rows</span>
             </div>
@@ -393,15 +397,6 @@
               </div>
             </template>
             <div v-else class="placeholder-empty">No rows.</div>
-          </div>
-
-          <!-- Column schema -->
-          <div v-if="schemaViews.length" class="qx-schema">
-            <div class="qx-block-label" style="margin-top: 18px">Available views</div>
-            <div v-for="v in schemaViews" :key="v.name" class="qx-schema-view">
-              <strong class="qx-schema-name">{{ v.name }}</strong>
-              <span class="qx-schema-cols">{{ (v.columns || []).map(c => c.name).join(', ') }}</span>
-            </div>
           </div>
 
           <!-- Examples (curated queries become editable starting points) -->
@@ -435,6 +430,7 @@ import {
   qpxSearchPeptides, qpxProtein, qpxProteinExpression,
   qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql,
 } from '../qpx.js'
+import QpxQueryBuilder from '../components/QpxQueryBuilder.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -802,6 +798,12 @@ async function loadPsms() {
   }
 }
 
+// The builder only emits on user changes, so an example or hand-written SQL stays put until then.
+function onBuilderSql(sql) {
+  sqlText.value = sql
+  sqlInfo.value = ''
+}
+
 async function loadSchema() {
   const ref = visibleRef.value
   if (!ref) return
@@ -825,7 +827,7 @@ async function loadExample(ex) {
   sqlText.value = ex.sql
   sqlResult.value = null
   sqlError.value = ''
-  sqlInfo.value = `Loaded "${ex.title}" — edit and run, or ask a question above.`
+  sqlInfo.value = `Loaded "${ex.title}" — edit and run.`
   await runSql()
   exampleBusy.value = ''
 }
@@ -976,6 +978,7 @@ watch(() => route.query, (q) => {
 .qx-query-head p { margin: 2px 0 0; }
 
 /* SQL editor */
+.qx-builder { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--border, rgba(0,0,0,0.1)); border-radius: 8px; }
 .qx-sql {
   width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.5;
   padding: 12px; border: 1px solid var(--border); border-radius: 8px;
@@ -983,10 +986,6 @@ watch(() => route.query, (q) => {
 }
 .qx-sql:focus { outline: none; border-color: var(--indigo); }
 .qx-sql-hint { font-size: 12px; }
-.qx-schema { display: flex; flex-direction: column; gap: 6px; }
-.qx-schema-view { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
-.qx-schema-name { color: var(--indigo); text-transform: none; font-family: var(--mono); min-width: 80px; }
-.qx-schema-cols { color: var(--text-secondary); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 .qx-sql-result { margin-top: 4px; }
 .qx-sort { margin-left: auto; }
 
