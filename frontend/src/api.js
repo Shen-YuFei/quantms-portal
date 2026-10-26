@@ -118,7 +118,7 @@ export function encodePath(value) {
 export async function apiPost(base, path, body, opts = {}) {
   const url = `${base}${path}`
   const timeout = opts.timeout ?? DEFAULT_TIMEOUT_MS
-  // POSTs here start work on the backend (SQL, LLM calls): never retried by default.
+  // POSTs here start work on the backend (SQL queries): never retried by default.
   const retries = opts.retries ?? 0
 
   let attempt = 0

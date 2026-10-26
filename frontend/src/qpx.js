@@ -2,7 +2,8 @@
 //
 // The backend lives at api.quantms.org/qpx-explore and is addressed per dataset
 // by a `ref` of the form "{accession}/{phash}" (e.g. MSV000085836/8e4c044b513d),
-// URL-encoded via encodePath. All calls are read-only GETs.
+// URL-encoded via encodePath. Reads are GETs; the SQL editor POSTs a
+// SELECT that the backend validates and confines to the dataset.
 
 import { apiGet, apiPost, encodePath } from './api.js'
 import { QPX_BASE } from './config.js'
@@ -10,8 +11,6 @@ import { QPX_BASE } from './config.js'
 // Catalogue of the curated DuckDB queries (ids, parameters) the backend allow-lists.
 export const qpxQueries = () => apiGet(QPX_BASE, '/queries')
 
-// Service status; `llm_configured` gates the "Ask in English" box.
-export const qpxHealth = () => apiGet(QPX_BASE, '/health')
 
 // Dataset-level summary: files present, views available, row counts, organisms, instruments.
 export const qpxOverview = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/overview`)
@@ -49,13 +48,9 @@ export const qpxPsms = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath
 export const qpxRunQuery = (ref, queryId, params) =>
   apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/query/${queryId}`, params)
 
-// Expose each available view's columns+types (backing the SQL editor / LLM).
+// Expose each available view's columns+types (backing the SQL editor).
 export const qpxSchema = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/schema`)
 
 // Run a free-form, SELECT-only DuckDB statement (validated + confined backend-side).
 export const qpxRunSql = (ref, { sql, limit }) =>
   apiPost(QPX_BASE, `/datasets/${encodePath(ref)}/sql`, { sql, limit })
-
-// Ask the backend LLM to translate a natural-language question to DuckDB SQL and run it.
-export const qpxFromNl = (ref, { question, limit }) =>
-  apiPost(QPX_BASE, `/datasets/${encodePath(ref)}/sql/from_nl`, { question, limit })

@@ -346,29 +346,8 @@
           <div v-else class="placeholder-empty">No spectral evidence matches.</div>
         </div>
 
-        <!-- Queries tab: SQL editor + LLM -->
+        <!-- Queries tab: SQL editor -->
         <div v-else-if="tab === 'queries'" class="qx-tab-body">
-          <div v-if="!nlEnabled" class="qx-hint qx-nl-off">
-            “Ask in English” is unavailable — the LLM isn't configured on this deployment. Use the SQL editor below.
-          </div>
-
-          <div class="qx-nl-box">
-            <div class="qx-block-label">Ask in English</div>
-            <div class="filter-group">
-              <input
-                v-model="nlQuestion"
-                class="qx-input qx-nl-input"
-                placeholder='e.g. "top 10 proteins by intensity"'
-                :disabled="!nlEnabled || nlRunning"
-                @keyup.enter="askNl"
-              />
-              <button class="page-btn primary" :disabled="!nlEnabled || nlRunning || !nlQuestion.trim()" @click="askNl">
-                {{ nlRunning ? 'Thinking…' : 'Ask' }}
-              </button>
-            </div>
-            <p v-if="nlError" class="notice">{{ nlError }}</p>
-          </div>
-
           <div class="qx-sql-box">
             <div class="qx-block-label">SQL editor (DuckDB · read-only SELECT)</div>
             <textarea
@@ -454,7 +433,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   qpxOverview, qpxRuns, qpxSamples, qpxSearchProteins,
   qpxSearchPeptides, qpxProtein, qpxProteinExpression,
-  qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql, qpxFromNl, qpxHealth,
+  qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql,
 } from '../qpx.js'
 
 const route = useRoute()
@@ -474,7 +453,7 @@ const tabs = [
 
 //: Curated queries, surfaced as clickable, editable examples for the SQL editor.
 //: These are representative DuckDB SELECT statements over the qpx views — the
-//: SQL editor (and the LLM path) are the primary interface, per "predefined
+//: The SQL editor is the primary interface, per "predefined
 //: queries are only interesting as examples".
 const examples = [
   {
@@ -575,12 +554,8 @@ const psms = ref([])
 const psmColumns = ref([])
 const psmAbsent = ref(false)
 
-//: SQL editor + LLM "Ask in English".
+//: SQL editor.
 const sqlMaxRows = 2000
-const nlEnabled = ref(false)
-const nlQuestion = ref('')
-const nlRunning = ref(false)
-const nlError = ref('')
 const sqlText = ref('')
 const sqlLimit = ref(200)
 const sqlRunning = ref(false)
@@ -659,7 +634,6 @@ function resetDerived() {
   psmAbsent.value = false
   selectedProtein.value = ''
   proteinDetail.value = { loading: false, error: '', peptides: [] }
-  nlError.value = ''
   sqlText.value = ''
   sqlResult.value = null
   sqlError.value = ''
@@ -876,31 +850,6 @@ async function runSql() {
   }
 }
 
-async function askNl() {
-  const ref = visibleRef.value
-  const q = nlQuestion.value
-  if (!ref || !q.trim()) return
-  const gen = ++loadGen
-  nlRunning.value = true
-  nlError.value = ''
-  sqlResult.value = null
-  sqlError.value = ''
-  try {
-    const res = await qpxFromNl(ref, { question: q, limit: sqlLimit.value || undefined })
-    if (gen !== loadGen) return
-    if (res.sql) {
-      sqlText.value = res.sql
-      sqlInfo.value = 'Generated SQL — edit and re-run if you like.'
-    }
-    sqlResult.value = res.result || {}
-  } catch (e) {
-    if (gen !== loadGen) return
-    nlError.value = e.message || 'the "Ask in English" request failed'
-  } finally {
-    if (gen === loadGen) nlRunning.value = false
-  }
-}
-
 async function openProtein(acc) {
   const ref = visibleRef.value
   const current = () => ref === visibleRef.value && acc === selectedProtein.value
@@ -944,7 +893,6 @@ function tabFromQuery(q) {
 }
 
 onMounted(() => {
-  qpxHealth().then((h) => { nlEnabled.value = !!(h && h.llm_configured) }).catch(() => {})
   const r = refFromQuery(route.query)
   if (r) {
     refInput.value = r
@@ -1027,10 +975,7 @@ watch(() => route.query, (q) => {
 .qx-query-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .qx-query-head p { margin: 2px 0 0; }
 
-/* SQL editor + "Ask in English" */
-.qx-nl-box { margin-bottom: 18px; }
-.qx-nl-input { flex: 1; min-width: 220px; }
-.qx-nl-off { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); }
+/* SQL editor */
 .qx-sql {
   width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.5;
   padding: 12px; border: 1px solid var(--border); border-radius: 8px;
