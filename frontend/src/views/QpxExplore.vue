@@ -1,0 +1,771 @@
+<template>
+  <div class="section" style="padding-top: 100px">
+    <div class="container">
+      <div class="crumbs">
+        <router-link to="/collections" class="crumb">Collections</router-link>
+        <span>›</span>
+        <router-link to="/applications" class="crumb">Applications</router-link>
+        <span>›</span>
+        <span class="crumb-current">qpx Dataset Explorer</span>
+      </div>
+
+      <h1 class="qx-title">qpx Dataset Explorer</h1>
+      <p class="qx-sub">
+        Open one content-addressed qpx dataset (<code>accession/phash</code>) and query it with
+        DuckDB — files, runs, samples, protein groups, peptides and a curated query gallery.
+        <router-link to="/docs/applications" class="qx-doc-link">Apps overview →</router-link>
+      </p>
+
+      <!-- Dataset selector -->
+      <div class="qx-picker">
+        <input
+          v-model="refInput"
+          class="qx-input"
+          placeholder="e.g. MSV000085836/8e4c044b513d"
+          spellcheck="false"
+          @keyup.enter="loadRef"
+        />
+        <button class="page-btn primary" :disabled="!refInput.trim()" @click="loadRef">Explore</button>
+        <span v-if="visibleRef" class="qx-picker-ref">{{ visibleRef }}</span>
+      </div>
+
+      <!-- Not loaded -->
+      <div v-if="!loaded && !loading" class="qx-placeholder">
+        <span class="placeholder-icon">🧬</span>
+        <p>Enter a dataset ref above, or open one from a dataset's page (Downloads → “Explore with DuckDB”).</p>
+      </div>
+
+      <!-- Loading -->
+      <div v-else-if="loading" class="loading-block">Querying dataset with DuckDB…</div>
+
+      <!-- Error -->
+      <div v-else-if="error" class="notice">
+        {{ error }}
+        <button class="page-btn" style="margin-left: 12px" @click="loadRef">Retry</button>
+      </div>
+
+      <!-- Loaded -->
+      <template v-else-if="overview">
+        <!-- Overview cards -->
+        <div class="qx-cards">
+          <div class="qx-card">
+            <div class="qx-card-val">{{ count(overview.row_counts.feature) }}</div>
+            <div class="qx-card-label">Features</div>
+          </div>
+          <div class="qx-card">
+            <div class="qx-card-val">{{ count(overview.row_counts.pg) }}</div>
+            <div class="qx-card-label">Protein groups</div>
+          </div>
+          <div class="qx-card">
+            <div class="qx-card-val">{{ count(overview.row_counts.psm) }}</div>
+            <div class="qx-card-label">PSMs</div>
+          </div>
+          <div class="qx-card">
+            <div class="qx-card-val">{{ overview.available_views.run ? nRuns : '—' }}</div>
+            <div class="qx-card-label">Runs</div>
+          </div>
+          <div class="qx-card">
+            <div class="qx-card-val">{{ overview.available_views.sample ? nSamples : '—' }}</div>
+            <div class="qx-card-label">Samples</div>
+          </div>
+        </div>
+        <p v-if="hasMissingViews" class="qx-hint">
+          Some views are missing ({{ missingViews.join(', ') }}) — the dataset is likely label-free or
+          doesn't ship that qpx table; those tabs will be empty.
+        </p>
+
+        <!-- Tabs -->
+        <div class="qx-tabs">
+          <button
+            v-for="t in tabs"
+            :key="t.id"
+            class="qx-tab"
+            :class="{ active: tab === t.id }"
+            @click="tab = t.id"
+          >{{ t.label }}</button>
+        </div>
+
+        <!-- Overview tab -->
+        <div v-if="tab === 'overview'" class="qx-tab-body">
+          <div class="qx-block" v-if="filesList.length">
+            <div class="qx-block-label">qpx files</div>
+            <ul class="qx-file-list">
+              <li v-for="f in filesList" :key="f">{{ f }}</li>
+            </ul>
+          </div>
+          <div class="qx-block">
+            <div class="qx-block-label">Organisms</div>
+            <div class="qx-chips">
+              <span v-for="o in overview.organisms" :key="o" class="tag tag-green">{{ o }}</span>
+              <span v-if="!overview.organisms.length" class="text-muted">—</span>
+            </div>
+          </div>
+          <div class="qx-block">
+            <div class="qx-block-label">Instruments</div>
+            <div class="qx-chips">
+              <span v-for="i in overview.instruments" :key="i" class="tag tag-blue">{{ i }}</span>
+              <span v-if="!overview.instruments.length" class="text-muted">—</span>
+            </div>
+          </div>
+          <div class="qx-block">
+            <div class="qx-block-label">Acquisition methods</div>
+            <div class="qx-chips">
+              <span v-for="a in overview.acquisition_methods" :key="a" class="tag">{{ a }}</span>
+              <span v-if="!overview.acquisition_methods.length" class="text-muted">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Runs tab -->
+        <div v-else-if="tab === 'runs'" class="qx-tab-body">
+          <div v-if="runs.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead><tr><th>Run</th></tr></thead>
+              <tbody>
+                <tr v-for="r in runs" :key="r.run_file_name">
+                  <td class="td-title" :title="r.run_file_name">{{ r.run_file_name }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No run table for this dataset.</div>
+        </div>
+
+        <!-- Samples tab -->
+        <div v-else-if="tab === 'samples'" class="qx-tab-body">
+          <div v-if="samples.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead>
+                <tr>
+                  <th v-for="c in sampleColumns" :key="c">{{ colLabel(c) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(s, idx) in samples" :key="idx">
+                  <td v-for="c in sampleColumns" :key="c">{{ val(s[c]) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No sample table for this dataset.</div>
+        </div>
+
+        <!-- Proteins tab -->
+        <div v-else-if="tab === 'proteins'" class="qx-tab-body">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <input v-model="proteinQ" class="qx-input" placeholder="Filter by accession or gene…" @keyup.enter="loadProteins" />
+              <button class="page-btn" @click="loadProteins">Search</button>
+            </div>
+            <span class="muted">{{ proteins.length }} shown</span>
+          </div>
+          <div v-if="proteins.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead>
+                <tr>
+                  <th>Protein</th><th>Genes</th><th>q-value</th><th>Intensity</th>
+                  <th>Peptides</th><th>Coverage</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in proteins" :key="p[0]">
+                  <td class="accession-link">{{ p[0] }}</td>
+                  <td>{{ p[1] || '—' }}</td>
+                  <td class="td-num">{{ num(p[2]) }}</td>
+                  <td class="td-num">{{ num(p[3]) }}</td>
+                  <td class="td-num">{{ num(p[4]) }}</td>
+                  <td class="td-num">{{ pct(p[5]) }}</td>
+                  <td><button class="page-btn" @click="openProtein(p[0])">Peptides</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No protein groups match.</div>
+
+          <!-- Protein detail -->
+          <div v-if="selectedProtein" class="qx-prot-detail">
+            <div class="qx-block">
+              <div class="qx-block-label">
+                {{ selectedProtein }}
+                <button class="page-btn" style="margin-left: 10px" @click="selectedProtein = null">Close</button>
+              </div>
+              <p v-if="proteinDetail.error" class="muted">{{ proteinDetail.error }}</p>
+              <div v-else-if="proteinDetail.loading" class="muted">Loading peptides…</div>
+              <div v-else-if="proteinDetail.expr && proteinDetail.expr.per_run && proteinDetail.expr.per_run.length" class="qx-block" style="margin-top: 10px;">
+                <div class="qx-block-label">
+                  Protein expression (per run, summed feature intensity)
+                  <span v-if="proteinDetail.expr.group_intensity != null" class="muted" style="text-transform:none">
+                    · group intensity {{ num(proteinDetail.expr.group_intensity) }}
+                  </span>
+                </div>
+                <div class="dataset-table-wrap">
+                  <table class="dataset-table">
+                    <thead><tr><th>Run</th><th>Features</th><th>Summed intensity</th><th>Max feature intensity</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(e, i) in proteinDetail.expr.per_run" :key="i">
+                        <td class="td-title" :title="e.run">{{ e.run }}</td>
+                        <td class="td-num">{{ num(e.n_features) }}</td>
+                        <td class="td-num">{{ num(e.summed_intensity) }}</td>
+                        <td class="td-num">{{ num(e.max_feature_intensity) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div v-else-if="proteinDetail.expr && proteinDetail.expr.per_run && !proteinDetail.expr.per_run.length" class="muted">
+                No per-run feature evidence for this protein.
+              </div>
+              <div v-if="proteinDetail.peptides.length" class="dataset-table-wrap" style="margin-top: 10px;">
+                <table class="dataset-table">
+                  <thead><tr><th>Peptide</th><th>Charge</th><th>Run</th><th>RT</th><th>q-value</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(pep, i) in proteinDetail.peptides" :key="i">
+                      <td class="td-title" :title="pep.sequence">{{ pep.sequence }}</td>
+                      <td class="td-num">{{ num(pep.charge) }}</td>
+                      <td class="td-title" :title="pep.run_file_name">{{ pep.run_file_name }}</td>
+                      <td class="td-num">{{ num(pep.rt) }}</td>
+                      <td class="td-num">{{ num(pep.peptide_qvalue) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted">No supporting peptides found.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Peptides tab -->
+        <div v-else-if="tab === 'peptides'" class="qx-tab-body">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <input v-model="peptideQ" class="qx-input" placeholder="Filter by sequence…" @keyup.enter="loadPeptides" />
+              <button class="page-btn" @click="loadPeptides">Search</button>
+            </div>
+            <span class="muted">{{ peptides.length }} shown</span>
+          </div>
+          <div v-if="peptides.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead><tr><th>Peptide</th><th>PSMs</th><th>Runs</th></tr></thead>
+              <tbody>
+                <tr v-for="p in peptides" :key="p[0]">
+                  <td class="td-title" :title="p[0]">{{ p[0] }}</td>
+                  <td class="td-num">{{ num(p[1]) }}</td>
+                  <td class="td-num">{{ num(p[2]) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No peptides match.</div>
+        </div>
+
+        <!-- Features tab -->
+        <div v-else-if="tab === 'features'" class="qx-tab-body">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <input v-model="featureQ" class="qx-input" placeholder="Filter by sequence or peptidoform…" @keyup.enter="loadFeatures" />
+              <input v-model="featureCharge" type="number" min="1" max="10" class="qx-input qx-input-sm" placeholder="charge" title="Precursor charge" />
+              <input v-model="featureQmax" type="number" min="0" max="1" step="0.0001" class="qx-input qx-input-sm" placeholder="q-max" title="Max peptide q-value" />
+              <input v-model="featureMod" class="qx-input qx-input-sm" placeholder="PTM (e.g. Oxidation)" title="Only features carrying this modification" @keyup.enter="loadFeatures" />
+              <button class="page-btn" @click="loadFeatures">Search</button>
+            </div>
+            <span class="muted">{{ features.length }} shown</span>
+          </div>
+          <div v-if="features.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead>
+                <tr>
+                  <th v-for="c in featureColumns" :key="c">{{ colLabel(c) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(f, i) in features" :key="i">
+                  <td v-for="(c, j) in featureColumns" :key="c" :class="j ? 'td-num' : 'td-title'" :title="String(f[j])">{{ val(f[j]) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No features match your filters.</div>
+        </div>
+
+        <!-- PTMs tab -->
+        <div v-else-if="tab === 'ptms'" class="qx-tab-body">
+          <p v-if="ptmSource === 'none'" class="qx-hint">
+            This dataset carries no PTM annotation (no <code>mods</code>/<code>mod_sites</code> / bracket-encoded <code>peptidoform</code>).
+          </p>
+          <div v-else-if="ptms.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead>
+                <tr>
+                  <th>Modification</th><th>Features</th>
+                  <th v-if="ptmColumns.includes('n_peptides')">Peptides</th>
+                  <th v-if="ptmColumns.includes('n_peptidoforms')">Peptidoforms</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(m, i) in ptms" :key="i">
+                  <td class="td-title">{{ m[0] }}</td>
+                  <td class="td-num">{{ num(m[1]) }}</td>
+                  <td v-if="ptmColumns.includes('n_peptides')" class="td-num">{{ num(m[2]) }}</td>
+                  <td v-if="ptmColumns.includes('n_peptidoforms')" class="td-num">{{ num(m[3]) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="placeholder-empty">No PTMs detected in this dataset.</div>
+        </div>
+
+        <!-- Spectra tab -->
+        <div v-else-if="tab === 'spectra'" class="qx-tab-body">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <input v-model="psmQ" class="qx-input" placeholder="Filter spectral evidence by peptide…" @keyup.enter="loadPsms" />
+              <button class="page-btn" @click="loadPsms">Search</button>
+            </div>
+            <span class="muted">{{ psms.length }} shown</span>
+          </div>
+          <p class="qx-hint">
+            Scan-level spectral assignments from the PSM table — raw peak lists aren't stored in the
+            parquet, so this surfaces the <code>scan</code>/precursor metadata that is available.
+          </p>
+          <div v-if="psms.length" class="dataset-table-wrap">
+            <table class="dataset-table">
+              <thead>
+                <tr><th v-for="c in psmColumns" :key="c">{{ colLabel(c) }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(s, i) in psms" :key="i">
+                  <td v-for="(c, j) in psmColumns" :key="c" :class="j ? 'td-num' : 'td-title'" :title="String(s[j])">{{ val(s[j]) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="psmAbsent" class="placeholder-empty">No PSM table for this dataset.</div>
+          <div v-else class="placeholder-empty">No spectral evidence matches.</div>
+        </div>
+
+        <!-- Queries tab -->
+        <div v-else-if="tab === 'queries'" class="qx-tab-body">
+          <div class="qx-query-grid">
+            <div class="qx-query-list">
+              <button
+                v-for="q in queryCatalog"
+                :key="q.id"
+                class="qx-query-item"
+                :class="{ active: activeQuery === q.id }"
+                @click="selectQuery(q.id)"
+              >
+                <strong>{{ q.title }}</strong>
+                <span class="muted">{{ q.description }}</span>
+              </button>
+            </div>
+            <div class="qx-query-result">
+              <div v-if="!activeQuerySpec" class="placeholder-empty">Select a query on the left to run it.</div>
+              <template v-else>
+                <div class="qx-query-head">
+                  <div>
+                    <strong>{{ activeQuerySpec.title }}</strong>
+                    <p class="muted">{{ activeQuerySpec.description }}</p>
+                  </div>
+                  <div class="filter-group">
+                    <label class="muted">limit</label>
+                    <input v-model.number="queryLimit" type="number" min="1" max="200" class="qx-input qx-input-sm" />
+                    <button class="page-btn primary" :disabled="queryRunning" @click="runActiveQuery">Run</button>
+                  </div>
+                </div>
+                <div v-if="queryError" class="notice">{{ queryError }}</div>
+                <div v-else-if="queryResult" class="dataset-table-wrap" style="margin-top: 12px;">
+                  <div v-if="queryResult.available === false" class="placeholder-empty">
+                    This view (<code>{{ queryResult.view }}</code>) is not present in this dataset.
+                  </div>
+                  <table v-else class="dataset-table">
+                    <thead><tr><th v-for="c in queryResult.columns" :key="c">{{ colLabel(c) }}</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(row, i) in queryResult.rows" :key="i">
+                        <td v-for="(cell, j) in row" :key="j" :class="j ? 'td-num' : ''">{{ val(cell) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p v-if="queryResult.rows && !queryResult.rows.length" class="muted" style="padding: 12px">No rows.</p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  qpxOverview, qpxRuns, qpxSamples, qpxSearchProteins,
+  qpxSearchPeptides, qpxProtein, qpxProteinExpression,
+  qpxSearchFeatures, qpxPtms, qpxPsms, qpxRunQuery, qpxQueries,
+} from '../qpx.js'
+
+const route = useRoute()
+
+const tabs = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'runs', label: 'Runs' },
+  { id: 'samples', label: 'Samples' },
+  { id: 'proteins', label: 'Proteins' },
+  { id: 'peptides', label: 'Peptides' },
+  { id: 'features', label: 'Features' },
+  { id: 'ptms', label: 'PTMs' },
+  { id: 'spectra', label: 'Spectra' },
+  { id: 'queries', label: 'Queries' },
+]
+
+const refInput = ref('')
+const visibleRef = ref('')
+const loading = ref(false)
+const loaded = ref(false)
+const error = ref('')
+const tab = ref('overview')
+
+const overview = ref(null)
+const filesList = ref([])
+const runs = ref([])
+const samples = ref([])
+const sampleColumns = ref([])
+
+const proteinQ = ref('')
+const proteins = ref([])
+const selectedProtein = ref('')
+const proteinDetail = ref({ loading: false, error: '', peptides: [] })
+
+const peptideQ = ref('')
+const peptides = ref([])
+
+const featureQ = ref('')
+const featureCharge = ref('')
+const featureQmax = ref('')
+const featureMod = ref('')
+const features = ref([])
+const featureColumns = ref([])
+
+const ptms = ref([])
+const ptmColumns = ref([])
+const ptmSource = ref('')
+
+const psmQ = ref('')
+const psms = ref([])
+const psmColumns = ref([])
+const psmAbsent = ref(false)
+
+const queryCatalog = ref([])
+const activeQuery = ref('')
+const queryLimit = ref(20)
+const queryResult = ref(null)
+const queryError = ref('')
+const queryRunning = ref(false)
+
+const activeQuerySpec = computed(() => queryCatalog.value.find((q) => q.id === activeQuery.value) || null)
+const nRuns = computed(() => runs.value.length)
+const nSamples = computed(() => samples.value.length)
+
+const missingViews = computed(() => {
+  if (!overview.value) return []
+  return ['feature', 'pg', 'psm', 'sample', 'run'].filter((v) => overview.value.available_views[v] === false)
+})
+const hasMissingViews = computed(() => missingViews.value.length > 0)
+
+function count(v) {
+  return v == null ? '—' : Number(v).toLocaleString()
+}
+function num(v) {
+  if (v == null || v === '') return '—'
+  const n = Number(v)
+  if (Number.isNaN(n)) return v
+  if (Math.abs(n) >= 1000 && Number.isInteger(n)) return n.toLocaleString()
+  return Number.isInteger(n) ? String(n) : n.toFixed(3)
+}
+function pct(v) {
+  if (v == null || v === '') return '—'
+  const n = Number(v)
+  return (Math.round(n * 1000) / 10) + '%'
+}
+function val(v) {
+  if (v == null || v === '') return '—'
+  if (Array.isArray(v)) return v.join(', ')
+  if (typeof v === 'boolean') return v ? 'yes' : 'no'
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+function colLabel(c) {
+  return String(c).replace(/_/g, ' ')
+}
+
+function setRef(ref) {
+  visibleRef.value = ref
+  refInput.value = ref || ''
+  tab.value = 'overview'
+  resetDerived()
+}
+
+function resetDerived() {
+  overview.value = null
+  filesList.value = []
+  runs.value = []
+  samples.value = []
+  sampleColumns.value = []
+  proteins.value = []
+  peptides.value = []
+  features.value = []
+  featureColumns.value = []
+  ptms.value = []
+  ptmColumns.value = []
+  ptmSource.value = ''
+  psms.value = []
+  psmColumns.value = []
+  psmAbsent.value = false
+  selectedProtein.value = ''
+  proteinDetail.value = { loading: false, error: '', peptides: [] }
+  activeQuery.value = ''
+  queryResult.value = null
+  queryError.value = ''
+}
+
+async function loadRef() {
+  const ref = refInput.value.trim()
+  if (!ref) return
+  const parts = ref.split('/')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    error.value = 'Dataset ref must look like "accession/phash", e.g. MSV000085836/8e4c044b513d.'
+    loaded.value = false
+    return
+  }
+  setRef(ref)
+  loading.value = true
+  error.value = ''
+  try {
+    const ov = await qpxOverview(ref)
+    overview.value = ov
+    filesList.value = Object.values(ov.files || {}).flat()
+    loaded.value = true
+    // load the rest in parallel (best-effort)
+    loadRuns()
+    loadSamples()
+    loadProteins()
+    loadPeptides()
+    loadFeatures()
+    loadPtms()
+    loadPsms()
+    loadCatalog()
+  } catch (e) {
+    loaded.value = false
+    error.value = `Could not open dataset ${ref}: ${e.message || e}`
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadRuns() {
+  if (!visibleRef.value) return
+  try {
+    const { runs: r } = await qpxRuns(visibleRef.value, { limit: 500 })
+    runs.value = r || []
+  } catch { runs.value = [] }
+}
+
+async function loadSamples() {
+  if (!visibleRef.value) return
+  try {
+    const { samples: s } = await qpxSamples(visibleRef.value, { limit: 500 })
+    samples.value = s || []
+    sampleColumns.value = s && s.length ? Object.keys(s[0]) : []
+  } catch { samples.value = [] }
+}
+
+async function loadProteins() {
+  if (!visibleRef.value) return
+  try {
+    const res = await qpxSearchProteins(visibleRef.value, { q: proteinQ.value, limit: 200 })
+    proteins.value = res.rows || []
+  } catch { proteins.value = [] }
+}
+
+async function loadPeptides() {
+  if (!visibleRef.value) return
+  try {
+    const res = await qpxSearchPeptides(visibleRef.value, { q: peptideQ.value, limit: 200 })
+    peptides.value = res.rows || []
+  } catch { peptides.value = [] }
+}
+
+async function loadFeatures() {
+  if (!visibleRef.value) return
+  const params = { q: featureQ.value, limit: 200 }
+  if (featureCharge.value !== '' && featureCharge.value != null) params.charge = featureCharge.value
+  if (featureQmax.value !== '' && featureQmax.value != null) params.qvalue_max = featureQmax.value
+  if (featureMod.value.trim()) params.mod = featureMod.value.trim()
+  try {
+    const res = await qpxSearchFeatures(visibleRef.value, params)
+    features.value = res.rows || []
+    featureColumns.value = res.columns || []
+  } catch { features.value = [] }
+}
+
+async function loadPtms() {
+  if (!visibleRef.value) return
+  try {
+    const res = await qpxPtms(visibleRef.value, { limit: 200 })
+    ptms.value = res.rows || []
+    ptmColumns.value = res.columns || []
+    ptmSource.value = res.source || ''
+  } catch { ptms.value = [] }
+}
+
+async function loadPsms() {
+  if (!visibleRef.value) return
+  try {
+    const res = await qpxPsms(visibleRef.value, { q: psmQ.value, limit: 200 })
+    psms.value = res.rows || []
+    psmColumns.value = res.columns || []
+    psmAbsent.value = res.available === false
+  } catch { psms.value = []; psmAbsent.value = true }
+}
+
+async function loadCatalog() {
+  try {
+    const res = await qpxQueries()
+    queryCatalog.value = res.queries || []
+  } catch { queryCatalog.value = [] }
+}
+
+async function openProtein(acc) {
+  selectedProtein.value = acc
+  proteinDetail.value = { loading: true, error: '', peptides: [] }
+  try {
+    const [d, expr] = await Promise.all([
+      qpxProtein(visibleRef.value, acc),
+      qpxProteinExpression(visibleRef.value, acc),
+    ])
+    proteinDetail.value = {
+      loading: false,
+      error: '',
+      peptides: d.peptides || [],
+      expr: expr || null,
+    }
+  } catch (e) {
+    proteinDetail.value = { loading: false, error: e.message || 'failed', peptides: [] }
+  }
+}
+
+function selectQuery(id) {
+  activeQuery.value = id
+  queryResult.value = null
+  queryError.value = ''
+  runActiveQuery()
+}
+
+async function runActiveQuery() {
+  if (!visibleRef.value || !activeQuery.value) return
+  queryRunning.value = true
+  queryError.value = ''
+  try {
+    queryResult.value = await qpxRunQuery(visibleRef.value, activeQuery.value, { limit: queryLimit.value || 20 })
+  } catch (e) {
+    queryError.value = e.message || 'query failed'
+    queryResult.value = null
+  } finally {
+    queryRunning.value = false
+  }
+}
+
+// Deep-link: ?ref=accession/phash or ?dataset_ref=accession/phash
+function refFromQuery(q) {
+  return (q && (q.ref || q.dataset_ref)) || ''
+}
+
+onMounted(() => {
+  const r = refFromQuery(route.query)
+  if (r) {
+    refInput.value = r
+    loadRef()
+  }
+})
+
+watch(() => route.query, (q) => {
+  const r = refFromQuery(q)
+  if (r && r !== visibleRef.value) {
+    refInput.value = r
+    loadRef()
+  }
+})
+</script>
+
+<style>
+.qx-title { font-size: 28px; font-weight: 700; margin: 8px 0 4px; }
+.qx-sub { color: var(--text-secondary); margin-bottom: 22px; }
+.qx-doc-link { margin-left: 8px; font-size: 13px; }
+
+.qx-picker { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.qx-input {
+  font-family: var(--mono);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  min-width: 320px;
+}
+.qx-input-sm { min-width: 60px; font-family: var(--mono); }
+.qx-picker-ref { color: var(--text-muted); font-family: var(--mono); font-size: 13px; }
+
+.qx-placeholder { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.qx-placeholder .placeholder-icon { font-size: 42px; display: block; margin-bottom: 12px; }
+.placeholder-empty { text-align: center; padding: 40px 12px; color: var(--text-muted); }
+
+.qx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.qx-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 14px 16px;
+}
+.qx-card-val { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+.qx-card-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-top: 2px; }
+.qx-hint { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
+
+.qx-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 18px; flex-wrap: wrap; }
+.qx-tab {
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+}
+.qx-tab.active { color: var(--indigo); border-bottom-color: var(--indigo); }
+
+.qx-tab-body { margin-top: 4px; }
+.qx-block { margin-bottom: 22px; }
+.qx-block-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
+.qx-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.qx-file-list { margin: 0; padding-left: 18px; color: var(--text-secondary); font-family: var(--mono); font-size: 13px; }
+
+.qx-prot-detail { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+.qx-query-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+.qx-query-list { display: flex; flex-direction: column; gap: 8px; }
+.qx-query-item {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); cursor: pointer; font-size: 13px;
+}
+.qx-query-item.active { border-color: var(--indigo); background: rgba(99,102,241,0.04); }
+.qx-query-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.qx-query-head p { margin: 2px 0 0; }
+
+@media (max-width: 820px) {
+  .qx-query-grid { grid-template-columns: 1fr; }
+  .qx-input { min-width: 100%; }
+}
+</style>

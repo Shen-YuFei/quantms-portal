@@ -21,6 +21,7 @@ export const PEPTIDE_SEARCH_BASE = `${API_BASE}/peptide-search`
 export const COMPASS_BASE = `${API_BASE}/compass`
 export const DE_BASE = (env.VITE_DE_BASE || `${API_BASE}/differential-expression`).replace(/\/$/, '')
 export const CELL_LINES_BASE = (env.VITE_CELL_LINES_BASE || `${API_BASE}/cell-lines`).replace(/\/$/, '')
+export const QPX_BASE = `${API_BASE}/qpx-explore`
 
 // S3 browse host for dataset file downloads.
 export const BROWSE_BASE = (env.VITE_BROWSE_BASE || 'https://browse.quantms.org').replace(/\/$/, '')

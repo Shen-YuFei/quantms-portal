@@ -129,6 +129,11 @@
           :to="datasetPath(dataset)"
           class="btn btn-outline ds-btn"
         >Open full page →</router-link>
+        <router-link
+          v-if="dataset.dataset_ref"
+          :to="{ path: '/apps/qpx-explore', query: { ref: dataset.dataset_ref } }"
+          class="btn btn-outline ds-btn"
+        >🧪 Explore with DuckDB</router-link>
       </div>
     </div>
 

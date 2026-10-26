@@ -17,6 +17,7 @@ export const routes = [
   { path: '/apps/peptide-search', component: () => import('./views/PeptideSearch.vue'), meta: { title: 'Peptide & Protein Search' } },
   { path: '/apps/compass', component: () => import('./views/ProteomeCompass.vue'), meta: { title: 'Proteome Compass' } },
   { path: '/apps/cell-lines', component: () => import('./views/CellLines.vue'), meta: { title: 'Cancer Cell Line Proteome' } },
+  { path: '/apps/qpx-explore', component: () => import('./views/QpxExplore.vue'), meta: { title: 'qpx Dataset Explorer' } },
   { path: '/cell-lines', redirect: (to) => ({ path: '/apps/cell-lines', query: to.query }) },
   { path: '/apps/coexpression', redirect: (to) => {
     // old links carried a UniProt accession in `protein`; the atlas is keyed by gene symbol
