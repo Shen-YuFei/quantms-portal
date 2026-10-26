@@ -30,7 +30,7 @@
       </div>
 
       <!-- Not loaded -->
-      <div v-if="!loaded && !loading" class="qx-placeholder">
+      <div v-if="!loaded && !loading && !error" class="qx-placeholder">
         <span class="placeholder-icon">🧬</span>
         <p>Enter a dataset ref above, or open one from a dataset's page (Downloads → “Explore with DuckDB”).</p>
       </div>
@@ -529,6 +529,9 @@ function resetDerived() {
   queryError.value = ''
 }
 
+// Bumped on every dataset open; a response for an older open is dropped.
+let loadGen = 0
+
 async function loadRef() {
   const ref = refInput.value.trim()
   if (!ref) return
@@ -539,10 +542,12 @@ async function loadRef() {
     return
   }
   setRef(ref)
+  const gen = ++loadGen
   loading.value = true
   error.value = ''
   try {
     const ov = await qpxOverview(ref)
+    if (gen !== loadGen) return
     overview.value = ov
     filesList.value = Object.values(ov.files || {}).flat()
     loaded.value = true
@@ -556,77 +561,113 @@ async function loadRef() {
     loadPsms()
     loadCatalog()
   } catch (e) {
+    if (gen !== loadGen) return
     loaded.value = false
     error.value = `Could not open dataset ${ref}: ${e.message || e}`
   } finally {
-    loading.value = false
+    if (gen === loadGen) loading.value = false
   }
 }
 
 async function loadRuns() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const { runs: r } = await qpxRuns(visibleRef.value, { limit: 500 })
+    const { runs: r } = await qpxRuns(ref, { limit: 500 })
+    if (ref !== visibleRef.value) return
     runs.value = r || []
-  } catch { runs.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    runs.value = []
+  }
 }
 
 async function loadSamples() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const { samples: s } = await qpxSamples(visibleRef.value, { limit: 500 })
+    const { samples: s } = await qpxSamples(ref, { limit: 500 })
+    if (ref !== visibleRef.value) return
     samples.value = s || []
     sampleColumns.value = s && s.length ? Object.keys(s[0]) : []
-  } catch { samples.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    samples.value = []
+  }
 }
 
 async function loadProteins() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const res = await qpxSearchProteins(visibleRef.value, { q: proteinQ.value, limit: 200 })
+    const res = await qpxSearchProteins(ref, { q: proteinQ.value, limit: 200 })
+    if (ref !== visibleRef.value) return
     proteins.value = res.rows || []
-  } catch { proteins.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    proteins.value = []
+  }
 }
 
 async function loadPeptides() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const res = await qpxSearchPeptides(visibleRef.value, { q: peptideQ.value, limit: 200 })
+    const res = await qpxSearchPeptides(ref, { q: peptideQ.value, limit: 200 })
+    if (ref !== visibleRef.value) return
     peptides.value = res.rows || []
-  } catch { peptides.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    peptides.value = []
+  }
 }
 
 async function loadFeatures() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   const params = { q: featureQ.value, limit: 200 }
   if (featureCharge.value !== '' && featureCharge.value != null) params.charge = featureCharge.value
   if (featureQmax.value !== '' && featureQmax.value != null) params.qvalue_max = featureQmax.value
   if (featureMod.value.trim()) params.mod = featureMod.value.trim()
   try {
-    const res = await qpxSearchFeatures(visibleRef.value, params)
+    const res = await qpxSearchFeatures(ref, params)
+    if (ref !== visibleRef.value) return
     features.value = res.rows || []
     featureColumns.value = res.columns || []
-  } catch { features.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    features.value = []
+  }
 }
 
 async function loadPtms() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const res = await qpxPtms(visibleRef.value, { limit: 200 })
+    const res = await qpxPtms(ref, { limit: 200 })
+    if (ref !== visibleRef.value) return
     ptms.value = res.rows || []
     ptmColumns.value = res.columns || []
     ptmSource.value = res.source || ''
-  } catch { ptms.value = [] }
+  } catch {
+    if (ref !== visibleRef.value) return
+    ptms.value = []
+  }
 }
 
 async function loadPsms() {
-  if (!visibleRef.value) return
+  const ref = visibleRef.value
+  if (!ref) return
   try {
-    const res = await qpxPsms(visibleRef.value, { q: psmQ.value, limit: 200 })
+    const res = await qpxPsms(ref, { q: psmQ.value, limit: 200 })
+    if (ref !== visibleRef.value) return
     psms.value = res.rows || []
     psmColumns.value = res.columns || []
     psmAbsent.value = res.available === false
-  } catch { psms.value = []; psmAbsent.value = true }
+  } catch {
+    if (ref !== visibleRef.value) return
+    psms.value = []; psmAbsent.value = true
+  }
 }
 
 async function loadCatalog() {
@@ -637,13 +678,16 @@ async function loadCatalog() {
 }
 
 async function openProtein(acc) {
+  const ref = visibleRef.value
+  const current = () => ref === visibleRef.value && acc === selectedProtein.value
   selectedProtein.value = acc
   proteinDetail.value = { loading: true, error: '', peptides: [] }
   try {
     const [d, expr] = await Promise.all([
-      qpxProtein(visibleRef.value, acc),
-      qpxProteinExpression(visibleRef.value, acc),
+      qpxProtein(ref, acc),
+      qpxProteinExpression(ref, acc),
     ])
+    if (!current()) return
     proteinDetail.value = {
       loading: false,
       error: '',
@@ -651,6 +695,7 @@ async function openProtein(acc) {
       expr: expr || null,
     }
   } catch (e) {
+    if (!current()) return
     proteinDetail.value = { loading: false, error: e.message || 'failed', peptides: [] }
   }
 }
@@ -663,16 +708,23 @@ function selectQuery(id) {
 }
 
 async function runActiveQuery() {
-  if (!visibleRef.value || !activeQuery.value) return
+  const ref = visibleRef.value
+  const id = activeQuery.value
+  const limit = queryLimit.value || 20
+  if (!ref || !id) return
+  const current = () => ref === visibleRef.value && id === activeQuery.value && limit === (queryLimit.value || 20)
   queryRunning.value = true
   queryError.value = ''
   try {
-    queryResult.value = await qpxRunQuery(visibleRef.value, activeQuery.value, { limit: queryLimit.value || 20 })
+    const res = await qpxRunQuery(ref, id, { limit })
+    if (!current()) return
+    queryResult.value = res
   } catch (e) {
+    if (!current()) return
     queryError.value = e.message || 'query failed'
     queryResult.value = null
   } finally {
-    queryRunning.value = false
+    if (current()) queryRunning.value = false
   }
 }
 
