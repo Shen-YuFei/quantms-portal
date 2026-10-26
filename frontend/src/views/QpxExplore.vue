@@ -31,9 +31,25 @@
       </div>
 
       <!-- Not loaded -->
-      <div v-if="!loaded && !loading && !error" class="qx-placeholder">
-        <span class="placeholder-icon">🧬</span>
-        <p>Enter a dataset ref above, or open one from a dataset's page (Downloads → “Explore with DuckDB”).</p>
+      <div v-if="!loaded && !loading && !error" class="qx-start">
+        <p class="qx-start-lead">
+          Enter a dataset ref above, open one from a dataset's page (Downloads → “Explore with DuckDB”),
+          or start from an example:
+        </p>
+        <div class="qx-examples-grid">
+          <button
+            v-for="ex in shownExamples"
+            :key="ex.accession"
+            class="qx-example"
+            :disabled="!ex.ref"
+            @click="openExample(ex)"
+          >
+            <span class="qx-example-acc">{{ ex.accession }}</span>
+            <strong>{{ ex.title }}</strong>
+            <span class="qx-example-kind">{{ ex.kind }}</span>
+            <span class="qx-example-why">{{ ex.why }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- Loading -->
@@ -345,6 +361,8 @@ import QxTable from '../components/QxTable.vue'
 import QxProgress from '../components/QxProgress.vue'
 import QxOverviewStats from '../components/QxOverviewStats.vue'
 import QxRunQc from '../components/QxRunQc.vue'
+import { apiGet } from '../api.js'
+import { DATASET_SEARCH_BASE } from '../config.js'
 import QxSampleIntensity from '../components/QxSampleIntensity.vue'
 import { formatCell } from '../qpxFormat.js'
 
@@ -509,6 +527,32 @@ function resetDerived() {
   sqlInfo.value = ''
   schemaViews.value = []
   exampleBusy.value = ''
+}
+
+//: Start-page examples, by accession: the current version (content hash) is looked up
+//: in dataset search, so a republished dataset never leaves a stale link here.
+const START_EXAMPLES = [
+  { accession: 'MSV000085836', title: 'CCLE cell lines', kind: 'TMT · 552 runs in 46 plexes',
+    why: 'QC shows calibration drift between TMT batches.' },
+  { accession: 'PXD048538', title: 'Gastric cancer cell lines', kind: 'Label-free DIA · 42 runs',
+    why: 'A clean label-free dataset; replicate 3 identifies less.' },
+  { accession: 'PXD021013', title: 'ProteomeTools HLA peptides', kind: 'MSNet import · PSMs only',
+    why: 'Peptide-level evidence: PSMs with scan, RT and PEP.' },
+]
+const exampleRefs = ref({})
+const shownExamples = computed(() => START_EXAMPLES.map((ex) => ({ ...ex, ref: exampleRefs.value[ex.accession] || '' })))
+
+async function resolveExamples() {
+  await Promise.all(START_EXAMPLES.map(async (ex) => {
+    try {
+      const d = await apiGet(DATASET_SEARCH_BASE, `/datasets/${encodeURIComponent(ex.accession)}`)
+      if (d && d.dataset_ref) exampleRefs.value = { ...exampleRefs.value, [ex.accession]: d.dataset_ref }
+    } catch { /* example stays disabled */ }
+  }))
+}
+
+function openExample(ex) {
+  if (ex.ref) router.push({ query: { ref: ex.ref } })
 }
 
 // Bumped on every dataset open; a response for an older open is dropped.
@@ -772,6 +816,8 @@ onMounted(() => {
   if (r) {
     refInput.value = r
     loadRef()
+  } else {
+    resolveExamples()
   }
 })
 
@@ -803,8 +849,16 @@ watch(() => route.query, (q) => {
 .qx-input-sm { min-width: 60px; font-family: var(--mono); }
 .qx-input-num { min-width: 0; width: 120px; }
 
-.qx-placeholder { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-.qx-placeholder .placeholder-icon { font-size: 42px; display: block; margin-bottom: 12px; }
+.qx-start { margin-top: 8px; }
+.qx-start-lead { color: var(--text-secondary); margin-bottom: 14px; }
+.qx-examples-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.qx-example { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-primary); font: inherit; }
+.qx-example:hover:not(:disabled), .qx-example:focus-visible { border-color: var(--indigo); background: rgba(99, 102, 241, 0.03); }
+.qx-example:disabled { cursor: default; opacity: 0.55; }
+.qx-example-acc { font-family: var(--mono); font-size: 12px; color: var(--indigo); }
+.qx-example-kind { font-size: 13px; color: var(--text-secondary); }
+.qx-example-why { font-size: 12px; color: var(--text-muted); }
 .placeholder-empty { text-align: center; padding: 40px 12px; color: var(--text-muted); }
 
 .qx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }

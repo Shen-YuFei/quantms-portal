@@ -12,6 +12,8 @@ const overview = {
 }
 
 function respond(url) {
+  const ds = url.match(/dataset-search\/datasets\/([^/?]+)$/)
+  if (ds) return ds[1] === 'PXD021013' ? {} : { accession: ds[1], dataset_ref: `${ds[1]}/hash1` }
   if (url.includes('/overview')) return overview
   if (url.includes('/runs')) return { runs: [{ run_file_name: 'r1' }] }
   if (url.includes('/proteins')) return { columns: ['anchor_protein', 'intensity'], rows: [['P1', 40]] }
@@ -34,6 +36,17 @@ async function open(query) {
 }
 
 describe('QpxExplore', () => {
+  it('offers examples on the start page, resolved to their current version', async () => {
+    const w = await open({})
+    const cards = w.findAll('.qx-example')
+    expect(cards.map((c) => c.find('.qx-example-acc').text())).toEqual(['MSV000085836', 'PXD048538', 'PXD021013'])
+    // an example dataset search cannot resolve stays disabled
+    expect(cards[2].attributes('disabled')).toBeDefined()
+    await cards[0].trigger('click')
+    await flushPromises()
+    expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/datasets/MSV000085836/hash1/overview'))).toBe(true)
+  })
+
   it('disables tabs whose table the dataset lacks', async () => {
     const w = await open({ ref: 'PXD1/abc' })
     const tab = (label) => w.findAll('.qx-tab').find((b) => b.text() === label)
