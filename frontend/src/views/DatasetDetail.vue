@@ -119,26 +119,6 @@ watch([accession, refHash], load)
 .version-link { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border: 1px solid var(--border);
   border-radius: 6px; color: var(--text-secondary); text-decoration: none; }
 .version-link.current { border-color: var(--indigo); color: var(--indigo); }
-.crumbs {
-  margin-bottom: 20px;
-  font-size: 13px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.crumb {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.crumb:hover {
-  color: var(--text-secondary);
-}
-.crumb-current {
-  font-family: var(--mono);
-  color: var(--indigo);
-}
 .detail-head {
   display: flex;
   align-items: center;
