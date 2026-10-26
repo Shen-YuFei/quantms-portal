@@ -39,8 +39,8 @@ describe('QpxExplore', () => {
     const tab = (label) => w.findAll('.qx-tab').find((b) => b.text() === label)
     expect(tab('Proteins').attributes('disabled')).toBeUndefined()
     expect(tab('Runs').attributes('disabled')).toBeUndefined()
-    expect(tab('Spectra').attributes('disabled')).toBeDefined()
-    expect(tab('Spectra').attributes('title')).toBe('This dataset has no psm table')
+    expect(tab('PSMs').attributes('disabled')).toBeDefined()
+    expect(tab('PSMs').attributes('title')).toBe('This dataset has no psm table')
     expect(tab('Features').attributes('disabled')).toBeDefined()
   })
 
@@ -54,6 +54,16 @@ describe('QpxExplore', () => {
   it('falls back to the overview when a deep-linked tab is unavailable', async () => {
     const w = await open({ ref: 'PXD1/abc', tab: 'spectra' })
     expect(w.find('.qx-tab.active').text()).toBe('Overview')
+  })
+
+  it('opens the PSM tab from an old ?tab=spectra link', async () => {
+    overview.available_views.psm = true
+    try {
+      const w = await open({ ref: 'PXD1/abc', tab: 'spectra' })
+      expect(w.find('.qx-tab.active').text()).toBe('PSMs')
+    } finally {
+      overview.available_views.psm = false
+    }
   })
 
   it('sends sort parameters when a protein column is clicked', async () => {

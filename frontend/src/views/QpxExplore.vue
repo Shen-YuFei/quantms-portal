@@ -37,7 +37,7 @@
       </div>
 
       <!-- Loading -->
-      <div v-else-if="loading" class="loading-block">Opening the dataset with DuckDB…</div>
+      <QxProgress v-else-if="loading" class="qx-opening" label="Opening the dataset with DuckDB…" />
 
       <!-- Error -->
       <div v-else-if="error" class="notice">
@@ -72,6 +72,8 @@
 
         <!-- Overview tab -->
         <div v-if="tab === 'overview'" class="qx-tab-body">
+          <QxOverviewStats :dataset-ref="visibleRef" />
+          <div class="qx-facts">
           <div class="qx-block" v-if="filesList.length">
             <div class="qx-block-label">qpx files</div>
             <ul class="qx-file-list">
@@ -98,6 +100,7 @@
               <span v-for="a in overview.acquisition_methods" :key="a" class="tag">{{ a }}</span>
               <span v-if="!overview.acquisition_methods.length" class="text-muted">—</span>
             </div>
+          </div>
           </div>
           <p v-if="missingViews.length" class="qx-hint">
             This dataset has no {{ missingViews.join(', ') }} table; the tabs that need it are disabled.
@@ -239,8 +242,8 @@
           </QxTable>
         </div>
 
-        <!-- Spectra -->
-        <div v-else-if="tab === 'spectra'" class="qx-tab-body">
+        <!-- PSMs -->
+        <div v-else-if="tab === 'psms'" class="qx-tab-body">
           <div class="filter-bar">
             <div class="filter-group">
               <input v-model="sv.psms.q" class="qx-input" placeholder="Filter PSMs by peptide…" @keyup.enter="loadServer('psms')" />
@@ -331,6 +334,8 @@ import {
 } from '../qpx.js'
 import QpxQueryBuilder from '../components/QpxQueryBuilder.vue'
 import QxTable from '../components/QxTable.vue'
+import QxProgress from '../components/QxProgress.vue'
+import QxOverviewStats from '../components/QxOverviewStats.vue'
 import { formatCell } from '../qpxFormat.js'
 
 const route = useRoute()
@@ -345,7 +350,7 @@ const tabs = [
   { id: 'peptides', label: 'Peptides', needs: 'psm' },
   { id: 'features', label: 'Features', needs: 'feature' },
   { id: 'ptms', label: 'PTMs', needs: 'feature' },
-  { id: 'spectra', label: 'Spectra', needs: 'psm' },
+  { id: 'psms', label: 'PSMs', needs: 'psm' },
   { id: 'queries', label: 'Query' },
 ]
 
@@ -720,8 +725,12 @@ function refFromQuery(q) {
   return (q && (q.ref || q.dataset_ref)) || ''
 }
 
+//: Old links used ?tab=spectra for the PSM tab.
+const TAB_ALIASES = { spectra: 'psms' }
+
 function tabFromQuery(q) {
-  const t = (q && q.tab) || ''
+  const raw = (q && q.tab) || ''
+  const t = TAB_ALIASES[raw] || raw
   return tabs.some((tb) => tb.id === t) ? t : ''
 }
 
@@ -791,6 +800,8 @@ watch(() => route.query, (q) => {
 .qx-tab:disabled { color: var(--text-muted); opacity: 0.45; cursor: not-allowed; }
 
 .qx-tab-body { margin-top: 4px; }
+.qx-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
+.qx-opening { max-width: 420px; margin: 40px auto; }
 .qx-block { margin-bottom: 22px; }
 .qx-block-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
 .qx-chips { display: flex; flex-wrap: wrap; gap: 8px; }
