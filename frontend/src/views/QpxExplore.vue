@@ -454,7 +454,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   qpxOverview, qpxRuns, qpxSamples, qpxSearchProteins,
   qpxSearchPeptides, qpxProtein, qpxProteinExpression,
-  qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql, qpxFromNl,
+  qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql, qpxFromNl, qpxHealth,
 } from '../qpx.js'
 
 const route = useRoute()
@@ -577,7 +577,7 @@ const psmAbsent = ref(false)
 
 //: SQL editor + LLM "Ask in English".
 const sqlMaxRows = 2000
-const nlEnabled = true
+const nlEnabled = ref(false)
 const nlQuestion = ref('')
 const nlRunning = ref(false)
 const nlError = ref('')
@@ -944,6 +944,7 @@ function tabFromQuery(q) {
 }
 
 onMounted(() => {
+  qpxHealth().then((h) => { nlEnabled.value = !!(h && h.llm_configured) }).catch(() => {})
   const r = refFromQuery(route.query)
   if (r) {
     refInput.value = r

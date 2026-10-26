@@ -107,7 +107,8 @@ export function encodePath(value) {
 
 /**
  * POST JSON to `${base}${path}` with a JSON `body`.
- * Same retry/timeout semantics as apiGet. Throws ApiError on failure.
+ * Same timeout as apiGet, no retries unless opts.retries is set. Throws ApiError
+ * carrying the backend's `detail` message on failure.
  *
  * @param {string} base   backend base URL (from config.js)
  * @param {string} path   path beginning with '/'
@@ -117,7 +118,8 @@ export function encodePath(value) {
 export async function apiPost(base, path, body, opts = {}) {
   const url = `${base}${path}`
   const timeout = opts.timeout ?? DEFAULT_TIMEOUT_MS
-  const retries = opts.retries ?? 1
+  // POSTs here start work on the backend (SQL, LLM calls): never retried by default.
+  const retries = opts.retries ?? 0
 
   let attempt = 0
   // eslint-disable-next-line no-constant-condition
@@ -161,7 +163,9 @@ export async function apiPost(base, path, body, opts = {}) {
         await sleep(400 * attempt)
         continue
       }
-      throw new ApiError(`Request to ${url} failed (${res.status})`, res.status)
+      let detail = ''
+      try { detail = (await res.json()).detail } catch { /* non-JSON error body */ }
+      throw new ApiError(typeof detail === 'string' && detail ? detail : `Request to ${url} failed (${res.status})`, res.status)
     }
 
     try {

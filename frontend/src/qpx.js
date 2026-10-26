@@ -10,6 +10,9 @@ import { QPX_BASE } from './config.js'
 // Catalogue of the curated DuckDB queries (ids, parameters) the backend allow-lists.
 export const qpxQueries = () => apiGet(QPX_BASE, '/queries')
 
+// Service status; `llm_configured` gates the "Ask in English" box.
+export const qpxHealth = () => apiGet(QPX_BASE, '/health')
+
 // Dataset-level summary: files present, views available, row counts, organisms, instruments.
 export const qpxOverview = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/overview`)
 
