@@ -80,6 +80,13 @@ const apps = [
     tier: 1,
     description: 'Portal-wide KPIs and distributions: datasets, peptides, proteins, organisms, instruments, and PTMs.',
   },
+  {
+    id: 'qpx-explore',
+    title: 'qpx Dataset Explorer',
+    to: '/apps/qpx-explore',
+    tier: 2,
+    description: 'Open one qpx dataset and explore it with DuckDB — files, runs, samples, protein-group and peptide search, per-protein detail, and a curated query gallery (PSMs per run, q-value and charge-state distributions, decoy rate).',
+  },
 ].map((a) => ({ ...a, obsolete: a.obsolete || OBSOLETE_APPS.has(a.id) }))
 </script>
 

@@ -25,6 +25,25 @@ search, organism/instrument/collection facets, and per-dataset metadata.
 distributions, per-organism proteome coverage, and modification breakdowns.
 [Open the app →](/statistics) · [Overview](/docs/stats-overview)
 
+## qpx Dataset Explorer
+
+**Open one qpx dataset and query it directly with DuckDB** — see which qpx tables
+it ships (feature, protein groups, PSM, sample, run) and their row counts, browse
+runs and samples, search protein groups and peptides, **search peptidoform
+features** (by sequence/charge/q-value/PTM), view the dataset's **PTM
+distribution**, **browse scan-level spectral evidence** (PSM table), drill into a
+single protein's supporting peptides and **per-run protein expression** (summed
+feature intensity), and run a curated gallery of DuckDB queries (PSMs per run,
+charge-state and q-value distributions, decoy rate, top protein groups).
+
+All reads are on-demand DuckDB with column projection and a hot in-memory query
+cache, so exploration stays fast. Reads are also **schema-aware and degrade
+gracefully**: a dataset missing an optional table (no `sample`/`psm`, no PTM
+annotation) shows empty tabs rather than errors, so the app works across
+heterogeneous qpx files. Trigger it for a specific dataset from that
+dataset's page → *Downloads → “🧪 Explore with DuckDB”* (or deep-link with
+`?ref=accession/phash`). [Open the app →](/apps/qpx-explore)
+
 ## Also available to AI agents
 
 Every app above mirrors its queries as **MCP tools**, so an AI assistant can run the

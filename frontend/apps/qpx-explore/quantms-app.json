@@ -1,0 +1,16 @@
+{
+  "id": "qpx-explore",
+  "title": "qpx Dataset Explorer",
+  "version": "1.0.0",
+  "category": "analysis",
+  "tier": 2,
+  "route": "/apps/qpx-explore",
+  "reads": [
+    "datasets/*"
+  ],
+  "backend": "/api/qpx-explore",
+  "data_prefix": "quantms/datasets",
+  "owner": "ypriverol",
+  "enabled": true,
+  "description": "Open one content-addressed qpx dataset (accession/phash) and explore it with DuckDB: files, row counts, organisms, instruments, runs and samples, protein-group and peptide search, per-protein detail, and a curated query gallery. Triggered per dataset from the portal's dataset view via ?ref=, and served to AI agents over MCP."
+}
