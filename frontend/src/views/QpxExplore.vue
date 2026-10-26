@@ -528,13 +528,7 @@ async function loadRef() {
     const qtab = tabFromQuery(route.query)
     const wanted = tabs.find((t) => t.id === qtab)
     if (wanted && tabAvailable(wanted)) tab.value = qtab
-    const has = (v) => ov.available_views[v] !== false
-    if (has('run')) loadWhole('runs', qpxRuns, 'runs')
-    if (has('sample')) loadWhole('samples', qpxSamples, 'samples')
-    if (has('feature')) { loadPtms(); loadServer('features') }
-    if (has('pg')) loadServer('proteins')
-    if (has('psm')) { loadServer('peptides'); loadServer('psms') }
-    loadSchema()
+    ensureTabData(tab.value)
   } catch (e) {
     if (gen !== loadGen) return
     loaded.value = false
@@ -630,8 +624,9 @@ function resort(id, s) {
 
 function showModFeatures(mod) {
   featureMod.value = mod
+  const alreadyLoaded = tabLoaded.has(`${visibleRef.value}|features`)
   setTab('features')
-  loadServer('features')
+  if (alreadyLoaded) loadServer('features')
 }
 
 // The builder only emits on user changes, so an example or hand-written SQL stays put until then.
@@ -712,8 +707,35 @@ async function openProtein(acc) {
 }
 
 // Switch tab AND keep the URL shareable: ?ref=…&tab=<id> (deep-linkable).
+//: Each tab's data loads the first time the tab is opened (once per dataset), so
+//: opening a dataset runs only the overview's queries instead of every tab's.
+const TAB_LOADERS = {
+  runs: () => loadWhole('runs', qpxRuns, 'runs'),
+  samples: () => loadWhole('samples', qpxSamples, 'samples'),
+  proteins: () => loadServer('proteins'),
+  peptides: () => loadServer('peptides'),
+  features: () => { loadServer('features'); ptmsOnce() },
+  ptms: () => ptmsOnce(),
+  psms: () => loadServer('psms'),
+  queries: () => loadSchema(),
+}
+const tabLoaded = new Set()
+
+// Features (its PTM filter) and PTMs share one PTM list.
+function ptmsOnce() {
+  if (!meta.ptms.loading && !meta.ptms.rows.length && !meta.ptms.source) loadPtms()
+}
+
+function ensureTabData(id) {
+  const key = `${visibleRef.value}|${id}`
+  if (!TAB_LOADERS[id] || tabLoaded.has(key)) return
+  tabLoaded.add(key)
+  TAB_LOADERS[id]()
+}
+
 function setTab(id) {
   tab.value = id
+  ensureTabData(id)
   const qtab = tabFromQuery(route.query)
   if (qtab !== id) {
     router.replace({ query: { ...route.query, tab: id } })

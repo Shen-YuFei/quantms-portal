@@ -5,8 +5,13 @@
 // URL-encoded via encodePath. Reads are GETs; the SQL editor POSTs a
 // SELECT that the backend validates and confines to the dataset.
 
-import { apiGet, apiPost, encodePath } from './api.js'
+import { apiGet as get, apiPost as post, encodePath } from './api.js'
 import { QPX_BASE } from './config.js'
+
+// A first query over a large dataset reads Parquet from S3 and can take tens of seconds.
+const SLOW = { timeout: 60000 }
+const apiGet = (base, path, params, opts) => get(base, path, params, { ...SLOW, ...opts })
+const apiPost = (base, path, body, opts) => post(base, path, body, { ...SLOW, ...opts })
 
 // Catalogue of the curated DuckDB queries (ids, parameters) the backend allow-lists.
 export const qpxQueries = () => apiGet(QPX_BASE, '/queries')

@@ -66,6 +66,19 @@ describe('QpxExplore', () => {
     }
   })
 
+  it('loads a tab only when it is opened, once', async () => {
+    const w = await open({ ref: 'PXD1/abc' })
+    const urls = () => global.fetch.mock.calls.map((c) => String(c[0]))
+    expect(urls().some((u) => u.includes('/proteins') || u.includes('/runs'))).toBe(false)
+    const tab = (label) => w.findAll('.qx-tab').find((b) => b.text() === label)
+    await tab('Proteins').trigger('click')
+    await flushPromises()
+    await tab('Overview').trigger('click')
+    await tab('Proteins').trigger('click')
+    await flushPromises()
+    expect(urls().filter((u) => u.includes('/proteins')).length).toBe(1)
+  })
+
   it('sends sort parameters when a protein column is clicked', async () => {
     const w = await open({ ref: 'PXD1/abc', tab: 'proteins' })
     await w.findAll('th button')[1].trigger('click')
