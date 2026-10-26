@@ -16,13 +16,12 @@
     </div>
 
     <!-- Identification charts -->
-    <div class="qo-grid">
-      <section v-for="c in idCharts" :key="c.part" class="qo-panel">
+    <div class="qo-grid" :style="gridCols(visibleCharts.length)">
+      <section v-for="c in visibleCharts" :key="c.part" class="qo-panel">
         <h3 class="qo-h">{{ c.title }}</h3>
-        <p class="qo-note">{{ c.note }}</p>
+        <p class="qo-note">{{ c.note }}{{ outsideNote(c.part) }}</p>
         <div v-if="parts[c.part].error" class="qo-empty">{{ parts[c.part].error }}</div>
         <div v-else-if="!parts[c.part].loaded" class="qo-skeleton" :style="{ height: `${c.height}px` }"></div>
-        <div v-else-if="!rowsOf(c.part).length" class="qo-empty">Not recorded in this dataset.</div>
         <StatsChart v-else type="bar" :data="barData(c)" :options="barOptions(c)" :height="c.height" />
       </section>
     </div>
@@ -30,7 +29,7 @@
     <!-- Sample annotations -->
     <template v-if="metaFields.length">
       <h3 class="qo-h qo-h-section">Samples</h3>
-      <div class="qo-grid">
+      <div class="qo-grid" :style="gridCols(metaFields.length)">
         <section v-for="f in metaFields" :key="f.key" class="qo-panel">
           <h3 class="qo-h">{{ f.title }}</h3>
           <p class="qo-note">{{ f.distinct.toLocaleString() }} distinct{{ f.distinct > f.top.length ? ` · top ${f.top.length} shown` : '' }}</p>
@@ -51,7 +50,8 @@ import { qpxStats } from '../qpx.js'
 
 const props = defineProps({ datasetRef: { type: String, required: true } })
 
-const PARTS = ['summary', 'per_run', 'charge', 'length', 'missed_cleavages', 'metadata']
+const PARTS = ['summary', 'per_run', 'charge', 'length', 'missed_cleavages', 'mass_error', 'rt',
+  'intensity', 'pep', 'peptides_per_protein', 'metadata']
 const blank = () => ({ loaded: false, error: '', data: null })
 const parts = reactive(Object.fromEntries(PARTS.map((p) => [p, blank()])))
 const done = computed(() => PARTS.filter((p) => parts[p].loaded || parts[p].error).length)
@@ -81,16 +81,39 @@ const tiles = computed(() => {
   return out.filter((t) => t.value !== '—')
 })
 
-const idCharts = computed(() => [
-  { part: 'per_run', title: 'Identifications per run', note: `Target ${sourceLabel.value} in each run, most first.`, height: 220, runs: true },
-  { part: 'charge', title: 'Precursor charge', note: `Target ${sourceLabel.value} by charge state.`, height: 220, label: (k) => `${k}+` },
-  { part: 'length', title: 'Peptide length', note: `Target ${sourceLabel.value} by sequence length (residues).`, height: 220 },
-  { part: 'missed_cleavages', title: 'Missed cleavages', note: `Target ${sourceLabel.value} by missed cleavages.`, height: 220 },
-])
+const H = 220
+const idCharts = computed(() => {
+  const src = sourceLabel.value
+  return [
+    { part: 'per_run', title: 'Identifications per run', note: `Target ${src} in each run, most first.`, height: H, runs: true },
+    { part: 'charge', title: 'Precursor charge', note: `Target ${src} by charge state.`, height: H, label: (k) => `${k}+` },
+    { part: 'length', title: 'Peptide length', note: `Target ${src} by sequence length (residues).`, height: H },
+    { part: 'missed_cleavages', title: 'Missed cleavages', note: `Target ${src} by missed cleavages.`, height: H },
+    { part: 'peptides_per_protein', title: 'Peptides per protein group', note: 'Protein groups by number of peptides; 20 means 20 or more.', height: H, label: (k) => (k >= 20 ? '20+' : String(k)) },
+    { part: 'mass_error', title: 'Precursor mass error', note: `Target ${src} by mass error (ppm); a tight peak near 0 means good calibration.`, height: H, hist: 1 },
+    { part: 'rt', title: 'Retention time', note: `Target ${src} by retention time (minutes): how the gradient was used.`, height: H, hist: 0 },
+    { part: 'intensity', title: 'Feature intensity', note: 'Target features by intensity (log10, summed over channels): dynamic range.', height: H, hist: 1 },
+    { part: 'pep', title: 'Posterior error probability', note: `Target ${src} by PEP (log10); further left is more confident.`, height: H, hist: 1 },
+  ]
+})
 
 function rowsOf(part) {
   const d = parts[part].data
-  return (d && d.available && d.rows) || []
+  if (!d || !d.available) return []
+  if (d.bins) return d.bins.map(([lo, hi, n]) => [(lo + hi) / 2, n])
+  return d.rows || []
+}
+
+// Hide a panel once its part is known to have no data, so the grid has no holes.
+const visibleCharts = computed(() => idCharts.value.filter((c) => {
+  const p = parts[c.part]
+  return p.error || !p.loaded || rowsOf(c.part).length > 0
+}))
+
+// Columns that leave the fewest empty slots in the last row (ties prefer 3).
+function gridCols(n) {
+  const best = [3, 2, 4].reduce((a, c) => ((n % c ? c - (n % c) : 0) < (n % a ? a - (n % a) : 0) ? c : a), 3)
+  return { '--qo-cols': Math.max(1, Math.min(n, best)) }
 }
 
 function cssVar(name, fallback) {
@@ -106,13 +129,31 @@ function bars(labels, values) {
   }
 }
 
+// Enough decimals that neighbouring bins get different labels.
+function binDecimals(part) {
+  const w = parts[part].data?.bin_width
+  return w > 0 ? Math.min(6, Math.max(0, Math.ceil(-Math.log10(w)))) : 1
+}
+
+function outsideNote(part) {
+  const d = parts[part].data
+  if (!d || !d.n_outside) return ''
+  const total = d.n_outside + (d.bins || []).reduce((a, b) => a + b[2], 0)
+  return ` ${d.n_outside.toLocaleString()} (${((100 * d.n_outside) / total).toFixed(1)}%) outside the range are not drawn.`
+}
+
 function barData(c) {
   const rows = rowsOf(c.part)
-  return bars(rows.map(([k]) => (c.label ? c.label(k) : String(k))), rows.map(([, n]) => n))
+  const label = c.label || (c.hist != null ? (k) => Number(k).toFixed(binDecimals(c.part)) : String)
+  return bars(rows.map(([k]) => label(k)), rows.map(([, n]) => n))
 }
 
 function barOptions(c) {
   const opts = { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  if (c.hist != null) {
+    // a histogram: bars touch
+    opts.datasets = { bar: { categoryPercentage: 1, barPercentage: 1, borderRadius: 1 } }
+  }
   if (c.runs) {
     // hundreds of runs: no tick labels, the tooltip names the run
     opts.scales.x = { ticks: { display: false }, grid: { display: false } }
@@ -140,7 +181,8 @@ const metaOptions = { indexAxis: 'y', plugins: { legend: { display: false } }, s
 .qo-tile { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px 16px; }
 .qo-tile-val { font-size: 20px; font-weight: 700; font-family: var(--mono); color: var(--text-primary); }
 .qo-tile-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.qo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 20px; align-items: start; }
+.qo-grid { display: grid; grid-template-columns: repeat(var(--qo-cols, 3), minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; align-items: start; }
+@media (max-width: 1000px) { .qo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .qo-panel { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 14px 16px; min-width: 0; }
 .qo-h { font-size: 14px; font-weight: 600; margin: 0; color: var(--text-primary); }
 .qo-h-section { font-size: 16px; margin: 8px 0 12px; }
