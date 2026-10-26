@@ -38,6 +38,6 @@ describe('QxTable', () => {
     expect(mount(QxTable, { props: { columns: ['a'], rows: [], emptyText: 'Nothing here.' } }).text()).toContain('Nothing here.')
     expect(mount(QxTable, { props: { columns: ['a'], rows: [], error: 'boom' } }).text()).toContain('boom')
     const busy = mount(QxTable, { props: { columns: ['a'], rows: [['x']], loading: true } })
-    expect(busy.find('.qt-badge').exists()).toBe(true)
+    expect(busy.find('[role="progressbar"]').exists()).toBe(true)
   })
 })

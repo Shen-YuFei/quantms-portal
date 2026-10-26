@@ -31,7 +31,7 @@ distributions, per-organism proteome coverage, and modification breakdowns.
 it ships (feature, protein groups, PSM, sample, run) and their row counts, browse
 runs and samples, search protein groups and peptides, **search peptidoform
 features** (by sequence/charge/q-value/PTM), view the dataset's **PTM
-distribution**, **browse scan-level spectral evidence** (PSM table), drill into a
+distribution**, **browse PSMs** (scan, RT, PEP), drill into a
 single protein's supporting peptides and **per-run protein expression** (summed
 feature intensity), and run a curated gallery of DuckDB queries (PSMs per run,
 charge-state and q-value distributions, decoy rate, top protein groups).

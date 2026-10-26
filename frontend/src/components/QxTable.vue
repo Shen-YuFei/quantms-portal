@@ -1,10 +1,10 @@
 <template>
   <div class="qt" :aria-busy="loading">
     <div v-if="error" class="notice">{{ error }}</div>
-    <div v-if="loading && !rows.length" class="qt-state">Loading…</div>
+    <QxProgress v-if="loading && !rows.length" class="qt-state-progress" label="Loading…" />
     <div v-else-if="!rows.length && !error" class="qt-state">{{ emptyText }}</div>
     <div v-else-if="rows.length" class="dataset-table-wrap qt-wrap" :class="{ 'qt-updating': loading }">
-      <span v-if="loading" class="qt-badge">Loading…</span>
+      <QxProgress v-if="loading" class="qt-refresh" />
       <table class="dataset-table qt-table">
         <thead>
           <tr>
@@ -44,6 +44,7 @@
 // serverSort: header clicks emit `sort` and the parent reloads; otherwise rows sort here.
 import { computed, reactive, watch } from 'vue'
 import { colLabel, compareValues, formatCell, isNumericColumn } from '../qpxFormat.js'
+import QxProgress from './QxProgress.vue'
 
 const props = defineProps({
   // ['col', ...] or [{ key, label, sortable }]
@@ -121,6 +122,6 @@ th.qt-num .qt-sort { justify-content: flex-end; }
 .qt-selected { background: rgba(99, 102, 241, 0.08); }
 .qt-state { text-align: center; padding: 40px 12px; color: var(--text-muted); }
 .qt-updating table { opacity: 0.5; transition: opacity 0.15s; }
-.qt-badge { position: sticky; top: 8px; left: 50%; float: right; margin: 8px; z-index: 2; padding: 2px 10px;
-  border-radius: 10px; background: var(--indigo); color: #fff; font-size: 12px; }
+.qt-state-progress { max-width: 320px; margin: 40px auto; }
+.qt-refresh { position: sticky; top: 0; left: 0; z-index: 2; }
 </style>

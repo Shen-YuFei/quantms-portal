@@ -54,3 +54,6 @@ export const qpxSchema = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}
 // Run a free-form, SELECT-only DuckDB statement (validated + confined backend-side).
 export const qpxRunSql = (ref, { sql, limit }) =>
   apiPost(QPX_BASE, `/datasets/${encodePath(ref)}/sql`, { sql, limit })
+
+// One overview statistic: summary, per_run, charge, length, missed_cleavages or metadata.
+export const qpxStats = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/stats/${part}`)
