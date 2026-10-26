@@ -104,3 +104,79 @@ export async function apiGet(base, path, params, opts = {}) {
 export function encodePath(value) {
   return String(value ?? '').split('/').map(encodeURIComponent).join('/')
 }
+
+/**
+ * POST JSON to `${base}${path}` with a JSON `body`.
+ * Same timeout as apiGet, no retries unless opts.retries is set. Throws ApiError
+ * carrying the backend's `detail` message on failure.
+ *
+ * @param {string} base   backend base URL (from config.js)
+ * @param {string} path   path beginning with '/'
+ * @param {object} [body] JSON body to send
+ * @param {object} [opts] { timeout, signal }
+ */
+export async function apiPost(base, path, body, opts = {}) {
+  const url = `${base}${path}`
+  const timeout = opts.timeout ?? DEFAULT_TIMEOUT_MS
+  // POSTs here start work on the backend (SQL queries): never retried by default.
+  const retries = opts.retries ?? 0
+
+  let attempt = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const controller = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeout)
+    const onExternalAbort = () => controller.abort()
+    if (opts.signal) {
+      if (opts.signal.aborted) controller.abort()
+      else opts.signal.addEventListener('abort', onExternalAbort, { once: true })
+    }
+    const cleanup = () => {
+      clearTimeout(timer)
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort)
+    }
+
+    let res
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+      })
+    } catch (e) {
+      cleanup()
+      const externalAbort = opts.signal && opts.signal.aborted
+      if (!timedOut && !externalAbort && attempt < retries) {
+        attempt++
+        await sleep(400 * attempt)
+        continue
+      }
+      throw new ApiError(timedOut ? `Request to ${url} timed out` : `Network error contacting ${url}`, 0)
+    }
+
+    if (!res.ok) {
+      cleanup()
+      if (res.status >= 500 && attempt < retries) {
+        attempt++
+        await sleep(400 * attempt)
+        continue
+      }
+      let detail = ''
+      try { detail = (await res.json()).detail } catch { /* non-JSON error body */ }
+      throw new ApiError(typeof detail === 'string' && detail ? detail : `Request to ${url} failed (${res.status})`, res.status)
+    }
+
+    try {
+      return await res.json()
+    } catch (e) {
+      if (timedOut) throw new ApiError(`Request to ${url} timed out`, 0)
+      if (opts.signal && opts.signal.aborted) throw new ApiError(`Request to ${url} was aborted`, 0)
+      throw new ApiError(`Invalid JSON from ${url}`, res.status)
+    } finally {
+      cleanup()
+    }
+  }
+}
+

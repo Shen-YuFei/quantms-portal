@@ -81,7 +81,7 @@
             :key="t.id"
             class="qx-tab"
             :class="{ active: tab === t.id }"
-            @click="tab = t.id"
+            @click="setTab(t.id)"
           >{{ t.label }}</button>
         </div>
 
@@ -155,9 +155,12 @@
           <div class="filter-bar">
             <div class="filter-group">
               <input v-model="proteinQ" class="qx-input" placeholder="Filter by accession or gene…" @keyup.enter="loadProteins" />
-              <button class="page-btn" @click="loadProteins">Search</button>
+              <button class="page-btn" :disabled="busy.proteins" @click="loadProteins">{{ busy.proteins ? 'Loading…' : 'Search' }}</button>
             </div>
             <span class="muted">{{ proteins.length }} shown</span>
+            <button class="page-btn qx-sort" @click="toggleProteinSort">
+              {{ proteinSort === 'qvalue' ? 'Sorted by q-value ↑' : 'Sort by q-value' }}
+            </button>
           </div>
           <div v-if="proteins.length" class="dataset-table-wrap">
             <table class="dataset-table">
@@ -168,7 +171,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="p in proteins" :key="p[0]">
+                <tr v-for="p in sortedProteins" :key="p[0]">
                   <td class="accession-link">{{ p[0] }}</td>
                   <td>{{ p[1] || '—' }}</td>
                   <td class="td-num">{{ num(p[2]) }}</td>
@@ -239,7 +242,7 @@
           <div class="filter-bar">
             <div class="filter-group">
               <input v-model="peptideQ" class="qx-input" placeholder="Filter by sequence…" @keyup.enter="loadPeptides" />
-              <button class="page-btn" @click="loadPeptides">Search</button>
+              <button class="page-btn" :disabled="busy.peptides" @click="loadPeptides">{{ busy.peptides ? 'Loading…' : 'Search' }}</button>
             </div>
             <span class="muted">{{ peptides.length }} shown</span>
           </div>
@@ -266,7 +269,7 @@
               <input v-model="featureCharge" type="number" min="1" max="10" class="qx-input qx-input-sm" placeholder="charge" title="Precursor charge" />
               <input v-model="featureQmax" type="number" min="0" max="1" step="0.0001" class="qx-input qx-input-sm" placeholder="q-max" title="Max peptide q-value" />
               <input v-model="featureMod" class="qx-input qx-input-sm" placeholder="PTM (e.g. Oxidation)" title="Only features carrying this modification" @keyup.enter="loadFeatures" />
-              <button class="page-btn" @click="loadFeatures">Search</button>
+              <button class="page-btn" :disabled="busy.features" @click="loadFeatures">{{ busy.features ? 'Loading…' : 'Search' }}</button>
             </div>
             <span class="muted">{{ features.length }} shown</span>
           </div>
@@ -319,7 +322,7 @@
           <div class="filter-bar">
             <div class="filter-group">
               <input v-model="psmQ" class="qx-input" placeholder="Filter spectral evidence by peptide…" @keyup.enter="loadPsms" />
-              <button class="page-btn" @click="loadPsms">Search</button>
+              <button class="page-btn" :disabled="busy.psms" @click="loadPsms">{{ busy.psms ? 'Loading…' : 'Search' }}</button>
             </div>
             <span class="muted">{{ psms.length }} shown</span>
           </div>
@@ -343,51 +346,79 @@
           <div v-else class="placeholder-empty">No spectral evidence matches.</div>
         </div>
 
-        <!-- Queries tab -->
+        <!-- Queries tab: SQL editor -->
         <div v-else-if="tab === 'queries'" class="qx-tab-body">
-          <div class="qx-query-grid">
+          <div class="qx-sql-box">
+            <div class="qx-block-label">SQL editor (DuckDB · read-only SELECT)</div>
+            <textarea
+              v-model="sqlText"
+              rows="7"
+              class="qx-sql"
+              spellcheck="false"
+              placeholder="SELECT sequence, charge, peptide_qvalue FROM feature WHERE NOT is_decoy ORDER BY peptide_qvalue ASC LIMIT 10"
+            ></textarea>
+            <div class="filter-group" style="margin-top: 8px">
+              <label class="muted">limit</label>
+              <input v-model.number="sqlLimit" type="number" min="1" :max="sqlMaxRows" class="qx-input qx-input-sm" />
+              <button class="page-btn primary" :disabled="sqlRunning || !sqlText.trim()" @click="runSql">
+                {{ sqlRunning ? 'Running…' : 'Run' }}
+              </button>
+              <button class="page-btn" :disabled="schemaLoading" @click="loadSchema">
+                {{ schemaLoading ? 'Loading…' : 'Show columns' }}
+              </button>
+              <span class="muted qx-sql-hint">SELECT-only · confined to this dataset · max {{ sqlMaxRows }} rows</span>
+            </div>
+            <p v-if="sqlInfo" class="qx-hint" style="margin-top: 6px">{{ sqlInfo }}</p>
+            <p v-if="sqlError" class="notice">{{ sqlError }}</p>
+          </div>
+
+          <!-- Result -->
+          <div v-if="sqlResult" class="qx-sql-result">
+            <div class="qx-block-label" style="margin-top: 18px">
+              Result
+              <span v-if="sqlResult.truncated" class="muted" style="text-transform: none">· truncated at {{ sqlResult.limit }} rows</span>
+            </div>
+            <div v-if="sqlResult.error" class="notice">{{ sqlResult.error }}</div>
+            <div v-else-if="sqlResult.available === false" class="placeholder-empty">No qpx views are available in this dataset.</div>
+            <template v-else-if="sqlResult.columns && sqlResult.columns.length">
+              <div class="dataset-table-wrap">
+                <table class="dataset-table">
+                  <thead><tr><th v-for="c in sqlResult.columns" :key="c">{{ colLabel(c) }}</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(row, i) in sqlResult.rows" :key="i">
+                      <td v-for="(cell, j) in row" :key="j" :class="j ? 'td-num' : ''">{{ val(cell) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+            <div v-else class="placeholder-empty">No rows.</div>
+          </div>
+
+          <!-- Column schema -->
+          <div v-if="schemaViews.length" class="qx-schema">
+            <div class="qx-block-label" style="margin-top: 18px">Available views</div>
+            <div v-for="v in schemaViews" :key="v.name" class="qx-schema-view">
+              <strong class="qx-schema-name">{{ v.name }}</strong>
+              <span class="qx-schema-cols">{{ (v.columns || []).map(c => c.name).join(', ') }}</span>
+            </div>
+          </div>
+
+          <!-- Examples (curated queries become editable starting points) -->
+          <div class="qx-examples">
+            <div class="qx-block-label" style="margin-top: 18px">Examples</div>
             <div class="qx-query-list">
               <button
-                v-for="q in queryCatalog"
-                :key="q.id"
+                v-for="ex in examples"
+                :key="ex.id"
                 class="qx-query-item"
-                :class="{ active: activeQuery === q.id }"
-                @click="selectQuery(q.id)"
+                :class="{ active: exampleBusy === ex.id }"
+                :disabled="exampleBusy !== '' && exampleBusy !== ex.id"
+                @click="loadExample(ex)"
               >
-                <strong>{{ q.title }}</strong>
-                <span class="muted">{{ q.description }}</span>
+                <strong>{{ ex.title }}</strong>
+                <span class="muted">{{ ex.description }}</span>
               </button>
-            </div>
-            <div class="qx-query-result">
-              <div v-if="!activeQuerySpec" class="placeholder-empty">Select a query on the left to run it.</div>
-              <template v-else>
-                <div class="qx-query-head">
-                  <div>
-                    <strong>{{ activeQuerySpec.title }}</strong>
-                    <p class="muted">{{ activeQuerySpec.description }}</p>
-                  </div>
-                  <div class="filter-group">
-                    <label class="muted">limit</label>
-                    <input v-model.number="queryLimit" type="number" min="1" max="200" class="qx-input qx-input-sm" />
-                    <button class="page-btn primary" :disabled="queryRunning" @click="runActiveQuery">Run</button>
-                  </div>
-                </div>
-                <div v-if="queryError" class="notice">{{ queryError }}</div>
-                <div v-else-if="queryResult" class="dataset-table-wrap" style="margin-top: 12px;">
-                  <div v-if="queryResult.available === false" class="placeholder-empty">
-                    This view (<code>{{ queryResult.view }}</code>) is not present in this dataset.
-                  </div>
-                  <table v-else class="dataset-table">
-                    <thead><tr><th v-for="c in queryResult.columns" :key="c">{{ colLabel(c) }}</th></tr></thead>
-                    <tbody>
-                      <tr v-for="(row, i) in queryResult.rows" :key="i">
-                        <td v-for="(cell, j) in row" :key="j" :class="j ? 'td-num' : ''">{{ val(cell) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p v-if="queryResult.rows && !queryResult.rows.length" class="muted" style="padding: 12px">No rows.</p>
-                </div>
-              </template>
             </div>
           </div>
         </div>
@@ -398,14 +429,15 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   qpxOverview, qpxRuns, qpxSamples, qpxSearchProteins,
   qpxSearchPeptides, qpxProtein, qpxProteinExpression,
-  qpxSearchFeatures, qpxPtms, qpxPsms, qpxRunQuery, qpxQueries,
+  qpxSearchFeatures, qpxPtms, qpxPsms, qpxSchema, qpxRunSql,
 } from '../qpx.js'
 
 const route = useRoute()
+const router = useRouter()
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
@@ -416,7 +448,56 @@ const tabs = [
   { id: 'features', label: 'Features' },
   { id: 'ptms', label: 'PTMs' },
   { id: 'spectra', label: 'Spectra' },
-  { id: 'queries', label: 'Queries' },
+  { id: 'queries', label: 'Query' },
+]
+
+//: Curated queries, surfaced as clickable, editable examples for the SQL editor.
+//: These are representative DuckDB SELECT statements over the qpx views — the
+//: The SQL editor is the primary interface, per "predefined
+//: queries are only interesting as examples".
+const examples = [
+  {
+    id: 'top_proteins',
+    title: 'Protein groups by intensity',
+    description: 'Top protein groups, strongest first.',
+    sql: "SELECT anchor_protein, global_qvalue, intensity FROM pg WHERE NOT is_decoy ORDER BY intensity DESC NULLS LAST LIMIT 20",
+  },
+  {
+    id: 'psms_per_run',
+    title: 'PSMs and peptides per run',
+    description: 'Count PSMs and distinct peptides per run file.',
+    sql: "SELECT run_file_name AS run, count(*) AS n_psms, count(DISTINCT sequence) AS n_peptides FROM psm WHERE NOT is_decoy GROUP BY run_file_name ORDER BY n_psms DESC LIMIT 20",
+  },
+  {
+    id: 'features_per_run',
+    title: 'Feature evidence per run',
+    description: 'Count peptide features (and distinct sequences) per run file.',
+    sql: "SELECT run_file_name AS run, count(*) AS n_features, count(DISTINCT sequence) AS n_peptides FROM feature WHERE NOT is_decoy GROUP BY run_file_name ORDER BY n_features DESC LIMIT 20",
+  },
+  {
+    id: 'top_peptides',
+    title: 'Most observed peptides',
+    description: 'Rank peptides by how many PSMs support them.',
+    sql: "SELECT sequence, count(*) AS n_psms, count(DISTINCT run_file_name) AS n_runs FROM psm WHERE NOT is_decoy GROUP BY sequence ORDER BY n_psms DESC LIMIT 20",
+  },
+  {
+    id: 'charge_distribution',
+    title: 'Precursor charge distribution',
+    description: 'How many features carry each precursor charge state.',
+    sql: "SELECT charge, count(*) AS n FROM feature WHERE NOT is_decoy GROUP BY charge ORDER BY n DESC LIMIT 20",
+  },
+  {
+    id: 'peptide_lengths',
+    title: 'Peptide length distribution',
+    description: 'Number of features by peptide length (residues).',
+    sql: "SELECT length(sequence) AS n_residues, count(*) AS n FROM feature WHERE NOT is_decoy GROUP BY length(sequence) ORDER BY n_residues LIMIT 60",
+  },
+  {
+    id: 'decoy_rate',
+    title: 'Decoy rate',
+    description: 'Share of target-decoy decoy features in the feature table.',
+    sql: "SELECT sum(CASE WHEN is_decoy THEN 1 ELSE 0 END) AS n_decoys, count(*) AS n_total, round(100.0 * sum(CASE WHEN is_decoy THEN 1.0 ELSE 0.0 END) / nullif(count(*), 0), 3) AS decoy_pct FROM feature",
+  },
 ]
 
 const refInput = ref('')
@@ -436,6 +517,20 @@ const proteinQ = ref('')
 const proteins = ref([])
 const selectedProtein = ref('')
 const proteinDetail = ref({ loading: false, error: '', peptides: [] })
+const proteinSort = ref('intensity')
+const sortedProteins = computed(() => {
+  const arr = proteins.value.slice()
+  if (proteinSort.value === 'qvalue') {
+    arr.sort((a, b) => {
+      const qa = Number(a[2])
+      const qb = Number(b[2])
+      if (Number.isNaN(qa)) return 1
+      if (Number.isNaN(qb)) return -1
+      return qa - qb
+    })
+  }
+  return arr
+})
 
 const peptideQ = ref('')
 const peptides = ref([])
@@ -447,6 +542,9 @@ const featureMod = ref('')
 const features = ref([])
 const featureColumns = ref([])
 
+//: Per-tab "loading" flags for the Search/Run buttons (scoped to a dataset open).
+const busy = ref({ proteins: false, peptides: false, features: false, psms: false, ptms: false })
+
 const ptms = ref([])
 const ptmColumns = ref([])
 const ptmSource = ref('')
@@ -456,14 +554,18 @@ const psms = ref([])
 const psmColumns = ref([])
 const psmAbsent = ref(false)
 
-const queryCatalog = ref([])
-const activeQuery = ref('')
-const queryLimit = ref(20)
-const queryResult = ref(null)
-const queryError = ref('')
-const queryRunning = ref(false)
+//: SQL editor.
+const sqlMaxRows = 2000
+const sqlText = ref('')
+const sqlLimit = ref(200)
+const sqlRunning = ref(false)
+const sqlResult = ref(null)
+const sqlError = ref('')
+const sqlInfo = ref('')
+const schemaLoading = ref(false)
+const schemaViews = ref([])
+const exampleBusy = ref('')
 
-const activeQuerySpec = computed(() => queryCatalog.value.find((q) => q.id === activeQuery.value) || null)
 const nRuns = computed(() => runs.value.length)
 const nSamples = computed(() => samples.value.length)
 
@@ -492,7 +594,15 @@ function val(v) {
   if (v == null || v === '') return '—'
   if (Array.isArray(v)) return v.join(', ')
   if (typeof v === 'boolean') return v ? 'yes' : 'no'
-  if (typeof v === 'object') return JSON.stringify(v)
+  if (typeof v === 'object') {
+    // peptide_counts: { unique_sequences: 74, total_sequences: 89 } -> "74 / 89"
+    if ('unique_sequences' in v || 'total_sequences' in v) {
+      const u = v.unique_sequences == null ? '—' : Number(v.unique_sequences).toLocaleString()
+      const t = v.total_sequences == null ? '—' : Number(v.total_sequences).toLocaleString()
+      return `${u} / ${t}`
+    }
+    return JSON.stringify(v)
+  }
   return String(v)
 }
 function colLabel(c) {
@@ -524,9 +634,12 @@ function resetDerived() {
   psmAbsent.value = false
   selectedProtein.value = ''
   proteinDetail.value = { loading: false, error: '', peptides: [] }
-  activeQuery.value = ''
-  queryResult.value = null
-  queryError.value = ''
+  sqlText.value = ''
+  sqlResult.value = null
+  sqlError.value = ''
+  sqlInfo.value = ''
+  schemaViews.value = []
+  exampleBusy.value = ''
 }
 
 // Bumped on every dataset open; a response for an older open is dropped.
@@ -559,7 +672,10 @@ async function loadRef() {
     loadFeatures()
     loadPtms()
     loadPsms()
-    loadCatalog()
+    loadSchema()
+    // honour a deep-link tab (?ref=…&tab=features)
+    const qtab = tabFromQuery(route.query)
+    if (qtab) tab.value = qtab
   } catch (e) {
     if (gen !== loadGen) return
     loaded.value = false
@@ -596,9 +712,14 @@ async function loadSamples() {
   }
 }
 
+function toggleProteinSort() {
+  proteinSort.value = proteinSort.value === 'qvalue' ? 'intensity' : 'qvalue'
+}
+
 async function loadProteins() {
   const ref = visibleRef.value
   if (!ref) return
+  busy.value.proteins = true
   try {
     const res = await qpxSearchProteins(ref, { q: proteinQ.value, limit: 200 })
     if (ref !== visibleRef.value) return
@@ -606,12 +727,15 @@ async function loadProteins() {
   } catch {
     if (ref !== visibleRef.value) return
     proteins.value = []
+  } finally {
+    busy.value.proteins = false
   }
 }
 
 async function loadPeptides() {
   const ref = visibleRef.value
   if (!ref) return
+  busy.value.peptides = true
   try {
     const res = await qpxSearchPeptides(ref, { q: peptideQ.value, limit: 200 })
     if (ref !== visibleRef.value) return
@@ -619,12 +743,15 @@ async function loadPeptides() {
   } catch {
     if (ref !== visibleRef.value) return
     peptides.value = []
+  } finally {
+    busy.value.peptides = false
   }
 }
 
 async function loadFeatures() {
   const ref = visibleRef.value
   if (!ref) return
+  busy.value.features = true
   const params = { q: featureQ.value, limit: 200 }
   if (featureCharge.value !== '' && featureCharge.value != null) params.charge = featureCharge.value
   if (featureQmax.value !== '' && featureQmax.value != null) params.qvalue_max = featureQmax.value
@@ -637,6 +764,8 @@ async function loadFeatures() {
   } catch {
     if (ref !== visibleRef.value) return
     features.value = []
+  } finally {
+    busy.value.features = false
   }
 }
 
@@ -658,6 +787,7 @@ async function loadPtms() {
 async function loadPsms() {
   const ref = visibleRef.value
   if (!ref) return
+  busy.value.psms = true
   try {
     const res = await qpxPsms(ref, { q: psmQ.value, limit: 200 })
     if (ref !== visibleRef.value) return
@@ -667,14 +797,57 @@ async function loadPsms() {
   } catch {
     if (ref !== visibleRef.value) return
     psms.value = []; psmAbsent.value = true
+  } finally {
+    busy.value.psms = false
   }
 }
 
-async function loadCatalog() {
+async function loadSchema() {
+  const ref = visibleRef.value
+  if (!ref) return
+  schemaLoading.value = true
+  sqlError.value = ''
   try {
-    const res = await qpxQueries()
-    queryCatalog.value = res.queries || []
-  } catch { queryCatalog.value = [] }
+    const res = await qpxSchema(ref)
+    if (ref !== visibleRef.value) return
+    schemaViews.value = res.views || []
+  } catch {
+    if (ref !== visibleRef.value) return
+    schemaViews.value = []
+  } finally {
+    if (ref === visibleRef.value) schemaLoading.value = false
+  }
+}
+
+async function loadExample(ex) {
+  if (!ex || exampleBusy.value) return
+  exampleBusy.value = ex.id
+  sqlText.value = ex.sql
+  sqlResult.value = null
+  sqlError.value = ''
+  sqlInfo.value = `Loaded "${ex.title}" — edit and run, or ask a question above.`
+  await runSql()
+  exampleBusy.value = ''
+}
+
+async function runSql() {
+  const ref = visibleRef.value
+  const sql = sqlText.value
+  if (!ref || !sql.trim()) return
+  const gen = ++loadGen // re-use the dataset-open generation guard to drop stale runs
+  sqlRunning.value = true
+  sqlError.value = ''
+  sqlInfo.value = ''
+  try {
+    const res = await qpxRunSql(ref, { sql, limit: sqlLimit.value || undefined })
+    if (gen !== loadGen) return
+    sqlResult.value = res
+  } catch (e) {
+    if (gen !== loadGen) return
+    sqlResult.value = { error: e.message || 'query failed' }
+  } finally {
+    if (gen === loadGen) sqlRunning.value = false
+  }
 }
 
 async function openProtein(acc) {
@@ -700,37 +873,23 @@ async function openProtein(acc) {
   }
 }
 
-function selectQuery(id) {
-  activeQuery.value = id
-  queryResult.value = null
-  queryError.value = ''
-  runActiveQuery()
-}
-
-async function runActiveQuery() {
-  const ref = visibleRef.value
-  const id = activeQuery.value
-  const limit = queryLimit.value || 20
-  if (!ref || !id) return
-  const current = () => ref === visibleRef.value && id === activeQuery.value && limit === (queryLimit.value || 20)
-  queryRunning.value = true
-  queryError.value = ''
-  try {
-    const res = await qpxRunQuery(ref, id, { limit })
-    if (!current()) return
-    queryResult.value = res
-  } catch (e) {
-    if (!current()) return
-    queryError.value = e.message || 'query failed'
-    queryResult.value = null
-  } finally {
-    if (current()) queryRunning.value = false
+// Switch tab AND keep the URL shareable: ?ref=…&tab=<id> (deep-linkable).
+function setTab(id) {
+  tab.value = id
+  const qtab = tabFromQuery(route.query)
+  if (qtab !== id) {
+    router.replace({ query: { ...route.query, tab: id } })
   }
 }
 
-// Deep-link: ?ref=accession/phash or ?dataset_ref=accession/phash
+// Deep-link helpers: ?ref=accession/phash (or ?dataset_ref=…) and ?tab=<id>.
 function refFromQuery(q) {
   return (q && (q.ref || q.dataset_ref)) || ''
+}
+
+function tabFromQuery(q) {
+  const t = (q && q.tab) || ''
+  return tabs.some((tb) => tb.id === t) ? t : ''
 }
 
 onMounted(() => {
@@ -815,6 +974,21 @@ watch(() => route.query, (q) => {
 .qx-query-item.active { border-color: var(--indigo); background: rgba(99,102,241,0.04); }
 .qx-query-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .qx-query-head p { margin: 2px 0 0; }
+
+/* SQL editor */
+.qx-sql {
+  width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.5;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: #0b0e17; color: #d7e0ff; resize: vertical; box-sizing: border-box;
+}
+.qx-sql:focus { outline: none; border-color: var(--indigo); }
+.qx-sql-hint { font-size: 12px; }
+.qx-schema { display: flex; flex-direction: column; gap: 6px; }
+.qx-schema-view { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+.qx-schema-name { color: var(--indigo); text-transform: none; font-family: var(--mono); min-width: 80px; }
+.qx-schema-cols { color: var(--text-secondary); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.qx-sql-result { margin-top: 4px; }
+.qx-sort { margin-left: auto; }
 
 @media (max-width: 820px) {
   .qx-query-grid { grid-template-columns: 1fr; }
