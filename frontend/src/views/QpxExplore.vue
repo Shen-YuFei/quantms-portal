@@ -107,6 +107,14 @@
           </p>
         </div>
 
+        <!-- QC: per-run metrics and per-sample intensity, each with outlier flags -->
+        <div v-else-if="tab === 'qc'" class="qx-tab-body">
+          <h3 class="qx-section">Runs</h3>
+          <QxRunQc :dataset-ref="visibleRef" />
+          <h3 class="qx-section">Samples</h3>
+          <QxSampleIntensity :dataset-ref="visibleRef" />
+        </div>
+
         <!-- Runs / Samples: small tables, loaded whole and sorted here -->
         <div v-else-if="tab === 'runs' || tab === 'samples'" class="qx-tab-body">
           <div class="filter-bar">
@@ -336,6 +344,8 @@ import QpxQueryBuilder from '../components/QpxQueryBuilder.vue'
 import QxTable from '../components/QxTable.vue'
 import QxProgress from '../components/QxProgress.vue'
 import QxOverviewStats from '../components/QxOverviewStats.vue'
+import QxRunQc from '../components/QxRunQc.vue'
+import QxSampleIntensity from '../components/QxSampleIntensity.vue'
 import { formatCell } from '../qpxFormat.js'
 
 const route = useRoute()
@@ -344,6 +354,7 @@ const router = useRouter()
 //: `needs` = the qpx table a tab reads; the tab is disabled when the dataset lacks it.
 const tabs = [
   { id: 'overview', label: 'Overview' },
+  { id: 'qc', label: 'QC', needs: 'feature' },
   { id: 'runs', label: 'Runs', needs: 'run' },
   { id: 'samples', label: 'Samples', needs: 'sample' },
   { id: 'proteins', label: 'Proteins', needs: 'pg' },
@@ -822,6 +833,7 @@ watch(() => route.query, (q) => {
 .qx-tab:disabled { color: var(--text-muted); opacity: 0.45; cursor: not-allowed; }
 
 .qx-tab-body { margin-top: 4px; }
+.qx-section { font-size: 16px; font-weight: 600; margin: 18px 0 10px; }
 .qx-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
 .qx-opening { max-width: 420px; margin: 40px auto; }
 .qx-block { margin-bottom: 22px; }

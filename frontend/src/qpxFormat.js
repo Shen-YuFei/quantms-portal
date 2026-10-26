@@ -20,6 +20,14 @@ const LABELS = {
   calculated_mz: 'Calculated m/z',
   rt: 'RT',
   max_intensity: 'Max intensity',
+  n_proteins: 'Proteins',
+  median_mass_error_ppm: 'Mass error (ppm)',
+  rt_start_min: 'RT 5 % (min)',
+  rt_end_min: 'RT 95 % (min)',
+  missed_cleavage_pct: 'Missed cleavages',
+  charge2_pct: 'Charge 2+',
+  contaminant_pct: 'Contaminants',
+  median_log10_intensity: 'Intensity (log10)',
 }
 
 export function colLabel(key) {
