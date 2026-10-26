@@ -62,3 +62,6 @@ export const qpxRunSql = (ref, { sql, limit }) =>
 
 // One overview statistic: summary, per_run, charge, length, missed_cleavages or metadata.
 export const qpxStats = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/stats/${part}`)
+
+// Dataset QC: 'runs' (per-run metrics) or 'samples' (per-sample protein intensity), with outlier flags.
+export const qpxQc = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/qc/${part}`)
