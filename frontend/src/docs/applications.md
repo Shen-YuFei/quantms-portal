@@ -27,22 +27,22 @@ distributions, per-organism proteome coverage, and modification breakdowns.
 
 ## qpx Dataset Explorer
 
-**Open one qpx dataset and query it directly with DuckDB** — see which qpx tables
-it ships (feature, protein groups, PSM, sample, run) and their row counts, browse
-runs and samples, search protein groups and peptides, **search peptidoform
-features** (by sequence/charge/q-value/PTM), view the dataset's **PTM
-distribution**, **browse PSMs** (scan, RT, PEP), drill into a
-single protein's supporting peptides and **per-run protein expression** (summed
-feature intensity), and run a curated gallery of DuckDB queries (PSMs per run,
-charge-state and q-value distributions, decoy rate, top protein groups).
+**Review one qpx dataset's quality and the evidence behind it**, read directly with
+DuckDB. The **Overview** shows headline counts and QC distributions (identifications
+per run, charge, peptide length, missed cleavages, precursor mass error, retention
+time, intensity, PEP, peptides per protein group) and the sample annotations. The
+**QC** tab lists per-run metrics and per-sample protein intensity, and flags outliers
+with a robust z-score (runs against runs of the same fraction, TMT channels within
+their plex; pooled references are not judged). Tables cover runs, samples, protein
+groups, peptides, features, PTMs and PSMs, all sortable, with a protein's supporting
+peptides and per-run expression. The **Query** tab has a filter builder and a
+read-only SQL editor confined to the dataset's own files.
 
-All reads are on-demand DuckDB with column projection and a hot in-memory query
-cache, so exploration stays fast. Reads are also **schema-aware and degrade
-gracefully**: a dataset missing an optional table (no `sample`/`psm`, no PTM
-annotation) shows empty tabs rather than errors, so the app works across
-heterogeneous qpx files. Trigger it for a specific dataset from that
-dataset's page → *Downloads → “🧪 Explore with DuckDB”* (or deep-link with
-`?ref=accession/phash`). [Open the app →](/apps/qpx-explore)
+Reads are on-demand DuckDB with column projection, so there is no build step. A
+dataset missing an optional table (no `sample`, `psm` or PTM annotation) disables
+that tab rather than erroring. Open it from a dataset's page →
+*Downloads → “🧪 Explore with DuckDB”*, deep-link with `?ref=accession/phash`, or
+start from an example on the app's start page. [Open the app →](/apps/qpx-explore)
 
 ## Also available to AI agents
 

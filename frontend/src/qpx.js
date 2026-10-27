@@ -13,15 +13,8 @@ const SLOW = { timeout: 60000 }
 const apiGet = (base, path, params, opts) => get(base, path, params, { ...SLOW, ...opts })
 const apiPost = (base, path, body, opts) => post(base, path, body, { ...SLOW, ...opts })
 
-// Catalogue of the curated DuckDB queries (ids, parameters) the backend allow-lists.
-export const qpxQueries = () => apiGet(QPX_BASE, '/queries')
-
-
 // Dataset-level summary: files present, views available, row counts, organisms, instruments.
 export const qpxOverview = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/overview`)
-
-// Raw file inventory for the dataset (which qpx parquet files exist).
-export const qpxFiles = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/files`)
 
 export const qpxRuns = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/runs`, params)
 export const qpxSamples = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/samples`, params)
@@ -48,10 +41,6 @@ export const qpxPtms = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath
 // Browse scan-level spectral evidence from the psm table (raw peak lists are not
 // stored in the parquet — this surfaces the scan/precursor metadata that is).
 export const qpxPsms = (ref, params) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/psms`, params)
-
-// Run a curated query by id (allow-listed on the backend).
-export const qpxRunQuery = (ref, queryId, params) =>
-  apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/query/${queryId}`, params)
 
 // Expose each available view's columns+types (backing the SQL editor).
 export const qpxSchema = (ref) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/schema`)
