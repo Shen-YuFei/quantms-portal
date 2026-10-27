@@ -41,13 +41,15 @@
             v-for="ex in shownExamples"
             :key="ex.accession"
             class="qx-example"
-            :disabled="!ex.ref"
+            :disabled="ex.state === 'loading'"
+            :aria-busy="ex.state === 'loading'"
             @click="openExample(ex)"
           >
             <span class="qx-example-acc">{{ ex.accession }}</span>
             <strong>{{ ex.title }}</strong>
-            <span class="qx-example-kind">{{ ex.kind }}</span>
+            <span class="qx-example-kind">{{ ex.kind }}{{ ex.samples ? ` · ${ex.samples.toLocaleString()} samples` : '' }}</span>
             <span class="qx-example-why">{{ ex.why }}</span>
+            <span v-if="ex.state === 'failed'" class="qx-example-failed">Could not look up the current version. Click to retry.</span>
           </button>
         </div>
       </div>
@@ -361,9 +363,9 @@ import QxTable from '../components/QxTable.vue'
 import QxProgress from '../components/QxProgress.vue'
 import QxOverviewStats from '../components/QxOverviewStats.vue'
 import QxRunQc from '../components/QxRunQc.vue'
+import QxSampleIntensity from '../components/QxSampleIntensity.vue'
 import { apiGet } from '../api.js'
 import { DATASET_SEARCH_BASE } from '../config.js'
-import QxSampleIntensity from '../components/QxSampleIntensity.vue'
 import { formatCell } from '../qpxFormat.js'
 
 const route = useRoute()
@@ -529,31 +531,44 @@ function resetDerived() {
   exampleBusy.value = ''
 }
 
-//: Start-page examples, by accession: the current version (content hash) is looked up
-//: in dataset search, so a republished dataset never leaves a stale link here.
+//: Start-page examples, by accession. The version and sample count come from dataset
+//: search, so the cards describe what to look at, not numbers that a republish changes.
 const START_EXAMPLES = [
-  { accession: 'MSV000085836', title: 'CCLE cell lines', kind: 'TMT · 552 runs in 46 plexes',
-    why: 'QC shows calibration drift between TMT batches.' },
-  { accession: 'PXD048538', title: 'Gastric cancer cell lines', kind: 'Label-free DIA · 42 runs',
-    why: 'A clean label-free dataset; replicate 3 identifies less.' },
+  { accession: 'MSV000085836', title: 'CCLE cell lines', kind: 'TMT, fractionated',
+    why: 'Many plexes: compare runs within a fraction and channels within a plex on the QC tab.' },
+  { accession: 'PXD048538', title: 'Gastric cancer cell lines', kind: 'Label-free DIA',
+    why: 'One sample per run: replicate consistency on the QC tab.' },
   { accession: 'PXD021013', title: 'ProteomeTools HLA peptides', kind: 'MSNet import · PSMs only',
     why: 'Peptide-level evidence: PSMs with scan, RT and PEP.' },
 ]
-const exampleRefs = ref({})
-const shownExamples = computed(() => START_EXAMPLES.map((ex) => ({ ...ex, ref: exampleRefs.value[ex.accession] || '' })))
+// accession -> { state: 'loading' | 'ok' | 'failed', ref, samples }
+const startExamples = ref({})
+const shownExamples = computed(() => START_EXAMPLES.map((ex) => ({ ...ex, state: 'loading', ...startExamples.value[ex.accession] })))
 
-async function resolveExamples() {
-  await Promise.all(START_EXAMPLES.map(async (ex) => {
-    try {
-      const d = await apiGet(DATASET_SEARCH_BASE, `/datasets/${encodeURIComponent(ex.accession)}`)
-      if (d && d.dataset_ref) exampleRefs.value = { ...exampleRefs.value, [ex.accession]: d.dataset_ref }
-    } catch { /* example stays disabled */ }
-  }))
+function setExample(acc, v) {
+  startExamples.value = { ...startExamples.value, [acc]: v }
+}
+
+// Looks up every example not yet resolved or in flight; a failed one is tried again.
+function resolveExamples() {
+  for (const ex of START_EXAMPLES) {
+    const cur = startExamples.value[ex.accession]
+    if (cur && cur.state !== 'failed') continue
+    setExample(ex.accession, { state: 'loading' })
+    apiGet(DATASET_SEARCH_BASE, `/datasets/${encodeURIComponent(ex.accession)}`, undefined, { retries: 0, timeout: 10000 })
+      .then((d) => setExample(ex.accession, d && d.dataset_ref
+        ? { state: 'ok', ref: d.dataset_ref, samples: d.samples || 0 }
+        : { state: 'failed' }))
+      .catch(() => setExample(ex.accession, { state: 'failed' }))
+  }
 }
 
 function openExample(ex) {
   if (ex.ref) router.push({ query: { ref: ex.ref } })
+  else if (ex.state === 'failed') resolveExamples()
 }
+
+const onStartPage = computed(() => !loaded.value && !loading.value && !error.value && !refFromQuery(route.query))
 
 // Bumped on every dataset open; a response for an older open is dropped.
 let loadGen = 0
@@ -816,16 +831,30 @@ onMounted(() => {
   if (r) {
     refInput.value = r
     loadRef()
-  } else {
-    resolveExamples()
   }
 })
+
+watch(onStartPage, (on) => { if (on) resolveExamples() }, { immediate: true })
+
+// Back to a URL without a ref (browser back, the Explorer link): show the start page.
+function closeDataset() {
+  loadGen++
+  visibleRef.value = ''
+  refInput.value = ''
+  overview.value = null
+  loaded.value = false
+  loading.value = false
+  error.value = ''
+  resetDerived()
+}
 
 watch(() => route.query, (q) => {
   const r = refFromQuery(q)
   if (r && r !== visibleRef.value) {
     refInput.value = r
     loadRef()
+  } else if (!r && visibleRef.value) {
+    closeDataset()
   }
 })
 </script>
@@ -859,6 +888,7 @@ watch(() => route.query, (q) => {
 .qx-example-acc { font-family: var(--mono); font-size: 12px; color: var(--indigo); }
 .qx-example-kind { font-size: 13px; color: var(--text-secondary); }
 .qx-example-why { font-size: 12px; color: var(--text-muted); }
+.qx-example-failed { font-size: 12px; color: var(--qual-medium); }
 .placeholder-empty { text-align: center; padding: 40px 12px; color: var(--text-muted); }
 
 .qx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
