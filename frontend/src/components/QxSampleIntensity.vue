@@ -16,7 +16,8 @@
           </template>
           <span v-if="nReference">Pooled references in grey are not judged. </span>
           <strong :class="{ 'si-warn': data.n_flagged }">{{ data.n_flagged ? `⚠ ${data.n_flagged} flagged` : 'No sample flagged' }}</strong>
-          (robust z &gt; {{ data.robust_z }} {{ labelFree ? 'against all samples' : 'within its plex' }}, and a meaningful difference).
+          (robust z &gt; {{ data.robust_z }} {{ labelFree ? 'against all samples' : 'within its plex' }}, a meaningful difference,
+          and lower intensity or fewer protein groups; a median well above the rest is also flagged).
         </p>
         <label class="si-toggle"><input v-model="asTable" type="checkbox" /> Show as table</label>
       </div>

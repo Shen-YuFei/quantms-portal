@@ -8,8 +8,9 @@
         <p class="rq-summary">
           <strong :class="{ 'rq-warn': data.n_flagged }">{{ data.n_flagged ? '⚠ ' : '' }}{{ data.n_flagged.toLocaleString() }}</strong>
           of {{ data.rows.length.toLocaleString() }} runs flagged.
-          A value is flagged when it is far from {{ BASELINE_TEXT[data.baseline] || data.baseline }} (robust z &gt; {{ data.robust_z }})
-          and the difference is large enough to matter.
+          A value is flagged when it is far from {{ BASELINE_TEXT[data.baseline] || data.baseline }} (robust z &gt; {{ data.robust_z }}),
+          the difference is large enough to matter, and it points the way that signals a problem: fewer identifications,
+          more contaminants or missed cleavages, or intensity or mass error off either way.
         </p>
         <label class="rq-toggle"><input v-model="onlyFlagged" type="checkbox" :disabled="!data.n_flagged" /> Only flagged runs</label>
       </div>
