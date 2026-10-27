@@ -21,6 +21,7 @@ function respond(url) {
   if (url.includes('/runs')) return { runs: [{ run_file_name: 'r1' }] }
   if (url.includes('/proteins')) return { columns: ['anchor_protein', 'intensity'], rows: [['P1', 40]] }
   if (url.includes('/schema')) return { views: [] }
+  if (url.includes('/ptms')) return { available: true, table: 'psm', source: 'modifications', columns: ['modification', 'n_psms', 'n_peptides', 'n_peptidoforms'], rows: [['Oxidation', 3, 2, 2]] }
   return {}
 }
 
@@ -91,6 +92,29 @@ describe('QpxExplore', () => {
     expect(tab('PSMs').attributes('disabled')).toBeDefined()
     expect(tab('PSMs').attributes('title')).toBe('This dataset has no psm table')
     expect(tab('Features').attributes('disabled')).toBeDefined()
+  })
+
+  it('enables PTMs from PSMs when the dataset has no feature table', async () => {
+    overview.available_views.psm = true
+    try {
+      const w = await open({ ref: 'PXD1/abc', tab: 'ptms' })
+      const tab = w.findAll('.qx-tab').find((b) => b.text() === 'PTMs')
+      expect(tab.attributes('disabled')).toBeUndefined()
+      expect(tab.classes()).toContain('active')
+      expect(w.text()).toContain('counted over target PSMs')
+      expect(w.find('.qt-table').text()).toContain('Oxidation')
+      // features are not there to drill into
+      expect(w.find('.qt-table .qx-link').exists()).toBe(false)
+    } finally {
+      overview.available_views.psm = false
+    }
+  })
+
+  it('disables PTMs without a feature or PSM table', async () => {
+    const w = await open({ ref: 'PXD1/abc' })
+    const tab = w.findAll('.qx-tab').find((b) => b.text() === 'PTMs')
+    expect(tab.attributes('disabled')).toBeDefined()
+    expect(tab.attributes('title')).toBe('This dataset has no feature or psm table')
   })
 
   it('counts protein groups and runs from the overview, not the loaded rows', async () => {
