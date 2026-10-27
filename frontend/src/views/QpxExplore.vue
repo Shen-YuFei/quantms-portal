@@ -11,8 +11,8 @@
 
       <h1 class="qx-title">qpx Dataset Explorer</h1>
       <p class="qx-sub">
-        Open one content-addressed qpx dataset (<code>accession/phash</code>) and query it with
-        DuckDB — files, runs, samples, protein groups, peptides and a curated query gallery.
+        Review one content-addressed qpx dataset (<code>accession/phash</code>): its quality
+        control and the evidence behind it — runs, samples, protein groups, peptides, features and PSMs.
         <router-link to="/docs/applications" class="qx-doc-link">Apps overview →</router-link>
       </p>
 
@@ -934,7 +934,6 @@ watch(() => route.query, (q) => {
 .qx-link:hover, .qx-link:focus-visible { text-decoration: underline; }
 .qt-state-inline { color: var(--text-muted); padding: 8px 0; }
 
-.qx-query-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
 .qx-query-list { display: flex; flex-direction: column; gap: 8px; }
 .qx-query-item {
   display: flex; flex-direction: column; gap: 2px; text-align: left;
@@ -942,8 +941,6 @@ watch(() => route.query, (q) => {
   background: var(--surface); cursor: pointer; font-size: 13px;
 }
 .qx-query-item.active { border-color: var(--indigo); background: rgba(99,102,241,0.04); }
-.qx-query-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-.qx-query-head p { margin: 2px 0 0; }
 
 /* SQL editor */
 .qx-builder { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--border, rgba(0,0,0,0.1)); border-radius: 8px; }
@@ -957,7 +954,6 @@ watch(() => route.query, (q) => {
 .qx-sql-result { margin-top: 4px; }
 
 @media (max-width: 820px) {
-  .qx-query-grid { grid-template-columns: 1fr; }
   .qx-input { min-width: 100%; }
 }
 </style>
