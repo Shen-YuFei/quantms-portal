@@ -11,9 +11,12 @@ const overview = {
   organisms: [], organism_parts: [], instruments: [], acquisition_methods: [],
 }
 
+let searchDown = false
+
 function respond(url) {
   const ds = url.match(/dataset-search\/datasets\/([^/?]+)$/)
-  if (ds) return ds[1] === 'PXD021013' ? {} : { accession: ds[1], dataset_ref: `${ds[1]}/hash1` }
+  if (ds && searchDown) throw new TypeError('network down')
+  if (ds) return ds[1] === 'PXD021013' ? {} : { accession: ds[1], dataset_ref: `${ds[1]}/hash1`, samples: 42 }
   if (url.includes('/overview')) return overview
   if (url.includes('/runs')) return { runs: [{ run_file_name: 'r1' }] }
   if (url.includes('/proteins')) return { columns: ['anchor_protein', 'intensity'], rows: [['P1', 40]] }
@@ -22,6 +25,7 @@ function respond(url) {
 }
 
 beforeEach(() => {
+  searchDown = false
   global.fetch = vi.fn(async (url) => ({ ok: true, status: 200, json: async () => respond(String(url)) }))
 })
 afterEach(() => { vi.restoreAllMocks() })
@@ -32,19 +36,51 @@ async function open(query) {
   await router.isReady()
   const w = mount(QpxExplore, { global: { plugins: [router] } })
   await flushPromises()
+  w.router = router
   return w
 }
+
+const searchCalls = () => global.fetch.mock.calls.filter((c) => String(c[0]).includes('dataset-search/datasets/')).length
 
 describe('QpxExplore', () => {
   it('offers examples on the start page, resolved to their current version', async () => {
     const w = await open({})
     const cards = w.findAll('.qx-example')
     expect(cards.map((c) => c.find('.qx-example-acc').text())).toEqual(['MSV000085836', 'PXD048538', 'PXD021013'])
-    // an example dataset search cannot resolve stays disabled
-    expect(cards[2].attributes('disabled')).toBeDefined()
+    expect(cards[0].find('.qx-example-kind').text()).toContain('42 samples')
+    // an example dataset search cannot resolve says so instead of sitting disabled
+    expect(cards[2].attributes('disabled')).toBeUndefined()
+    expect(cards[2].find('.qx-example-failed').exists()).toBe(true)
     await cards[0].trigger('click')
     await flushPromises()
     expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/datasets/MSV000085836/hash1/overview'))).toBe(true)
+  })
+
+  it('retries an example whose lookup failed', async () => {
+    searchDown = true
+    const w = await open({})
+    expect(w.findAll('.qx-example-failed')).toHaveLength(3)
+    searchDown = false
+    await w.findAll('.qx-example')[0].trigger('click')
+    await flushPromises()
+    const card = w.findAll('.qx-example')[0]
+    expect(card.find('.qx-example-failed').exists()).toBe(false)
+    expect(card.find('.qx-example-kind').text()).toContain('42 samples')
+  })
+
+  it('does not look up examples when opened on a dataset', async () => {
+    await open({ ref: 'PXD1/abc' })
+    expect(searchCalls()).toBe(0)
+  })
+
+  it('returns to a working start page when the ref leaves the URL', async () => {
+    const w = await open({ ref: 'PXD1/abc' })
+    await w.router.push({ path: '/apps/qpx-explore', query: {} })
+    await flushPromises()
+    const cards = w.findAll('.qx-example')
+    expect(cards).toHaveLength(3)
+    expect(cards[0].attributes('disabled')).toBeUndefined()
+    expect(w.find('.qx-card').exists()).toBe(false)
   })
 
   it('disables tabs whose table the dataset lacks', async () => {
