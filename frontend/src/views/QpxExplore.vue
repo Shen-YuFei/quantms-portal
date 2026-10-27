@@ -83,7 +83,7 @@
             :class="{ active: tab === t.id }"
             :aria-selected="tab === t.id"
             :disabled="!tabAvailable(t)"
-            :title="tabAvailable(t) ? '' : `This dataset has no ${t.needs} table`"
+            :title="tabAvailable(t) ? '' : `This dataset has no ${[t.needs].flat().join(' or ')} table`"
             @click="setTab(t.id)"
           >{{ t.label }}</button>
         </div>
@@ -255,17 +255,21 @@
           <p v-if="meta.ptms.source === 'none'" class="qx-hint">
             This dataset carries no PTM annotation.
           </p>
-          <QxTable
-            v-else
-            :columns="meta.ptms.columns" :rows="meta.ptms.rows"
-            :loading="meta.ptms.loading" :error="meta.ptms.error"
-            sort-key="n_features" empty-text="No modified peptides in this dataset."
-          >
-            <template #cell="{ column, value, text }">
-              <button v-if="column === 'modification'" class="qx-link" :title="`Show features carrying ${value}`" @click="showModFeatures(value)">{{ text }}</button>
-              <template v-else>{{ text }}</template>
-            </template>
-          </QxTable>
+          <template v-else>
+            <p v-if="meta.ptms.table === 'psm'" class="qx-hint">
+              This dataset has no feature table, so modifications are counted over target PSMs.
+            </p>
+            <QxTable
+              :columns="meta.ptms.columns" :rows="meta.ptms.rows"
+              :loading="meta.ptms.loading" :error="meta.ptms.error"
+              :sort-key="meta.ptms.columns[1] || ''" empty-text="No modified peptides in this dataset."
+            >
+              <template #cell="{ column, value, text }">
+                <button v-if="column === 'modification' && meta.ptms.table === 'feature'" class="qx-link" :title="`Show features carrying ${value}`" @click="showModFeatures(value)">{{ text }}</button>
+                <template v-else>{{ text }}</template>
+              </template>
+            </QxTable>
+          </template>
         </div>
 
         <!-- PSMs -->
@@ -371,7 +375,7 @@ import { formatCell } from '../qpxFormat.js'
 const route = useRoute()
 const router = useRouter()
 
-//: `needs` = the qpx table a tab reads; the tab is disabled when the dataset lacks it.
+//: `needs` = the qpx table a tab reads (or a list, any of which will do); the tab is disabled without it.
 const tabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'qc', label: 'QC', needs: 'feature' },
@@ -380,7 +384,7 @@ const tabs = [
   { id: 'proteins', label: 'Proteins', needs: 'pg' },
   { id: 'peptides', label: 'Peptides', needs: 'psm' },
   { id: 'features', label: 'Features', needs: 'feature' },
-  { id: 'ptms', label: 'PTMs', needs: 'feature' },
+  { id: 'ptms', label: 'PTMs', needs: ['feature', 'psm'] },
   { id: 'psms', label: 'PSMs', needs: 'psm' },
   { id: 'queries', label: 'Query' },
 ]
@@ -455,7 +459,7 @@ const featureQmax = ref('')
 const featureMod = ref('')
 
 //: Small tables, loaded whole.
-const newMeta = () => ({ rows: [], columns: [], loading: false, error: '', source: '' })
+const newMeta = () => ({ rows: [], columns: [], loading: false, error: '', source: '', table: '' })
 const meta = reactive({ runs: newMeta(), samples: newMeta(), ptms: newMeta() })
 
 const selectedProtein = ref('')
@@ -480,7 +484,7 @@ const missingViews = computed(() => {
 })
 
 function tabAvailable(t) {
-  return !t.needs || !overview.value || overview.value.available_views[t.needs] !== false
+  return !t.needs || !overview.value || [t.needs].flat().some((n) => overview.value.available_views[n] !== false)
 }
 
 function count(v) {
@@ -645,6 +649,7 @@ async function loadPtms() {
     m.rows = res.rows || []
     m.columns = res.columns || []
     m.source = res.source || ''
+    m.table = res.table || ''
   } catch (e) {
     if (ref !== visibleRef.value) return
     m.rows = []
