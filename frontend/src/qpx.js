@@ -53,4 +53,5 @@ export const qpxRunSql = (ref, { sql, limit }) =>
 export const qpxStats = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/stats/${part}`)
 
 // Dataset QC: 'runs' (per-run metrics) or 'samples' (per-sample protein intensity), with outlier flags.
-export const qpxQc = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/qc/${part}`)
+// Per-run QC scans every feature: about 70 s on the largest dataset (229M features).
+export const qpxQc = (ref, part) => apiGet(QPX_BASE, `/datasets/${encodePath(ref)}/qc/${part}`, undefined, { timeout: 180000 })
