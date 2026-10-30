@@ -97,7 +97,8 @@
           </div>
         </div>
 
-        <!-- Comparison table -->
+        <!-- Comparison table; each tissue is marked with its organ system -->
+        <ChartLegend :items="systemLegend" :note="systems.failed.value ? 'The ontology service could not be reached, so tissues are not marked by organ system.' : 'Tissue marks: organ system (UBERON).'" />
         <div class="expr-table-wrap">
           <table class="expr-table">
             <thead>
@@ -114,7 +115,9 @@
             </thead>
             <tbody>
               <tr v-for="tissue in allTissues" :key="tissue">
-                <td class="tissue-name">{{ tissue }}</td>
+                <td class="tissue-name" :title="systemTitle(tissue)">
+                  <i class="system-dot" :style="{ background: systems.groups.value[tissue]?.colour || OTHER }"></i>{{ tissue }}
+                </td>
                 <td style="text-align: center; font-size: 12px; color: var(--text-muted);">
                   {{ maxSampleCount(tissue) }}
                 </td>
@@ -221,7 +224,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { computeStats, isAlreadyAdded } from '../utils/baseline.js'
 import { createBaselineClient } from '../utils/baselineClient.js'
-import { CATEGORICAL } from '../utils/chartColors.js'
+import { CATEGORICAL, chartColor } from '../utils/chartColors.js'
+import ChartLegend from '../components/ChartLegend.vue'
+import { ORGAN_SYSTEMS, groupLegend, organSystem, useGroups } from '../chartGroups.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -354,6 +359,15 @@ const allTissues = computed(() => {
     return maxB - maxA
   })
 })
+
+// Organ system of each tissue, looked up live; grey until it arrives.
+const OTHER = chartColor('other')
+const systems = useGroups(() => allTissues.value, organSystem)
+const systemLegend = computed(() => groupLegend(ORGAN_SYSTEMS, allTissues.value.map((t) => systems.groups.value[t]).filter(Boolean)))
+function systemTitle(tissue) {
+  const g = systems.groups.value[tissue]
+  return g ? `${g.group}${g.match ? ` (${g.match})` : ''}` : ''
+}
 
 function getMedian(protein, tissue) {
   return protein.stats[tissue]?.median ?? null
@@ -568,6 +582,15 @@ function stripX(val) {
   color: var(--text-primary);
   font-size: 13px;
   white-space: nowrap;
+}
+.system-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  transition: background-color 240ms ease-out;
 }
 
 /* Heatmap cells */

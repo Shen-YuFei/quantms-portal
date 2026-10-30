@@ -257,23 +257,28 @@
     <!-- Observation mini-bars -->
     <div v-if="topTissues.length || topDiseases.length || topSpecies.length" class="pp-block">
       <div class="pp-block-label">Where it is observed <span class="pp-unit">· observations (spectral matches)</span></div>
+      <p class="pp-bars-key">
+        Tissues are coloured by organ system (UBERON), diseases by kind, species by taxonomic group (UniProt); hover a bar for its group.
+      </p>
       <div class="pp-bars-grid">
         <div v-if="topTissues.length" class="pp-bars">
           <div class="pp-bars-cap">By tissue</div>
-          <div v-for="row in topTissues" :key="'bt-' + row.value" class="pp-bar-row">
-            <span class="pp-bar-label" :title="row.value">{{ row.value }}</span>
+          <ChartLegend :items="tissueLegend" class="pp-bars-legend" />
+          <div v-for="row in topTissues" :key="'bt-' + row.value" class="pp-bar-row" :title="groupTitle(row.value, systems.groups.value[row.value])">
+            <span class="pp-bar-label">{{ row.value }}</span>
             <span class="pp-bar-track">
-              <span class="pp-bar-fill pp-bar-tissue" :style="{ width: pct(row.n_observations, topTissueMax) }" />
+              <span class="pp-bar-fill" :style="{ width: pct(row.n_observations, topTissueMax), background: colourIn(systems.groups, row.value) }" />
             </span>
             <span class="pp-bar-val" :title="`${formatNum(row.n_observations)} observations`">{{ formatBig(row.n_observations) }}</span>
           </div>
         </div>
         <div v-if="topDiseases.length" class="pp-bars">
           <div class="pp-bars-cap">By disease</div>
-          <div v-for="row in topDiseases" :key="'bd-' + row.value" class="pp-bar-row">
-            <span class="pp-bar-label" :title="row.value">{{ row.value }}</span>
+          <ChartLegend :items="diseaseLegend" class="pp-bars-legend" />
+          <div v-for="row in topDiseases" :key="'bd-' + row.value" class="pp-bar-row" :title="groupTitle(row.value, diseaseGroup(row.value))">
+            <span class="pp-bar-label">{{ row.value }}</span>
             <span class="pp-bar-track">
-              <span class="pp-bar-fill pp-bar-disease" :style="{ width: pct(row.n_observations, topDiseaseMax) }" />
+              <span class="pp-bar-fill" :style="{ width: pct(row.n_observations, topDiseaseMax), background: diseaseGroup(row.value).colour }" />
             </span>
             <span class="pp-bar-val" :title="`${formatNum(row.n_observations)} observations`">{{ formatBig(row.n_observations) }}</span>
           </div>
@@ -282,10 +287,11 @@
              profile), so the breakdown only carries information when >1 organism appears. -->
         <div v-if="topSpecies.length > 1" class="pp-bars">
           <div class="pp-bars-cap">By species</div>
-          <div v-for="row in topSpecies" :key="'bs-' + row.value" class="pp-bar-row">
-            <span class="pp-bar-label" :title="row.value">{{ row.value }}</span>
+          <ChartLegend :items="speciesLegend" class="pp-bars-legend" />
+          <div v-for="row in topSpecies" :key="'bs-' + row.value" class="pp-bar-row" :title="groupTitle(row.value, taxa.groups.value[row.value])">
+            <span class="pp-bar-label">{{ row.value }}</span>
             <span class="pp-bar-track">
-              <span class="pp-bar-fill pp-bar-organism" :style="{ width: pct(row.n_observations, topSpeciesMax) }" />
+              <span class="pp-bar-fill" :style="{ width: pct(row.n_observations, topSpeciesMax), background: colourIn(taxa.groups, row.value) }" />
             </span>
             <span class="pp-bar-val" :title="`${formatNum(row.n_observations)} observations`">{{ formatBig(row.n_observations) }}</span>
           </div>
@@ -309,6 +315,11 @@ import { PEPTIDE_SEARCH_BASE } from '../config.js'
 import { formatNum, formatBig, ptmClassInfo, orderPtms, isBiologicalPtm } from '../utils/format.js'
 import { uniprotUrl as buildUniprotUrl } from '../utils/links.js'
 import ProteinSequenceMap from './ProteinSequenceMap.vue'
+import ChartLegend from './ChartLegend.vue'
+import { chartColor } from '../utils/chartColors.js'
+import {
+  DISEASE_GROUPS, ORGAN_SYSTEMS, TAXON_GROUPS, diseaseGroup, groupLegend, organSystem, taxonGroup, useGroups,
+} from '../chartGroups.js'
 import { getPeptideStats } from '../utils/peptideStats.js'
 
 // Corpus-wide observation distribution (identical for every protein), read
@@ -611,6 +622,17 @@ const aiDescription = computed(() => (profile.value?.ai_description || '').trim(
 const topTissues = computed(() => arr(profile.value?.observations?.by_tissue).slice(0, 20))
 const topDiseases = computed(() => arr(profile.value?.observations?.by_disease).slice(0, 20))
 const topSpecies = computed(() => arr(profile.value?.observations?.by_species).slice(0, 20))
+
+// Bars take their group's colour: tissues by organ system and species by taxonomic
+// group (looked up live, grey until they arrive), diseases by kind.
+const systems = useGroups(() => topTissues.value.map((r) => r.value), organSystem)
+const taxa = useGroups(() => (topSpecies.value.length > 1 ? topSpecies.value.map((r) => r.value) : []), taxonGroup)
+const colourIn = (resolved, name) => resolved.value[name]?.colour || chartColor('other')
+const legendOf = (order, rows, resolved) => groupLegend(order, rows.map((r) => resolved(r.value)).filter(Boolean))
+const tissueLegend = computed(() => legendOf(ORGAN_SYSTEMS, topTissues.value, (v) => systems.groups.value[v]))
+const diseaseLegend = computed(() => legendOf(DISEASE_GROUPS, topDiseases.value, diseaseGroup))
+const speciesLegend = computed(() => legendOf(TAXON_GROUPS, topSpecies.value, (v) => taxa.groups.value[v]))
+const groupTitle = (value, g) => (g ? `${value} · ${g.group}${g.match ? ` (${g.match})` : ''}` : value)
 const topTissueMax = computed(() => Math.max(1, ...topTissues.value.map((r) => Number(r.n_observations) || 0)))
 const topDiseaseMax = computed(() => Math.max(1, ...topDiseases.value.map((r) => Number(r.n_observations) || 0)))
 const topSpeciesMax = computed(() => Math.max(1, ...topSpecies.value.map((r) => Number(r.n_observations) || 0)))
@@ -1073,9 +1095,9 @@ watch(() => [props.accession, props.gppMin], () => load(props.accession), { imme
   height: 100%;
   border-radius: 4px;
 }
-.pp-bar-tissue { background: var(--dim-tissue); }
-.pp-bar-disease { background: var(--dim-disease); }
-.pp-bar-organism { background: var(--dim-organism); }
+.pp-bar-fill { transition: background-color 240ms ease-out; }
+.pp-bars-key { font-size: 12px; color: var(--text-muted); margin: -2px 0 10px; }
+.pp-bars-legend { margin: 0 0 8px; }
 .pp-bar-val {
   font-size: 11px;
   color: var(--text-muted);

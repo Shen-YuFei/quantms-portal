@@ -7,12 +7,12 @@
         v-for="(r, i) in rows"
         :key="r.organism"
         :style="{ '--i': i }"
-        :title="`${r.organism}: ${r.proteins.toLocaleString()} proteins, ${r.peptides.toLocaleString()} peptides`"
+        :title="`${r.organism}: ${r.proteins.toLocaleString()} proteins, ${r.peptides.toLocaleString()} peptides${groups[r.organism] ? ` · ${groups[r.organism].group}` : ''}`"
       >
         <span class="bar-name">{{ r.organism }}</span>
         <span class="bar-meta">{{ r.datasets }} {{ r.datasets === 1 ? 'dataset' : 'datasets' }}</span>
         <span class="bar-line">
-          <span class="bar" :style="{ width: `calc(${r.proteins / rows[0].proteins} * (100% - 4.5em))` }" />
+          <span class="bar" :style="{ width: `calc(${r.proteins / rows[0].proteins} * (100% - 4.5em))`, background: colourOf(r.organism) }" />
           <span class="bar-value">{{ formatBig(r.proteins) }}</span>
         </span>
       </li>
@@ -31,9 +31,11 @@
       <router-link to="/statistics">Statistics</router-link> page.
     </p>
 
+    <ChartLegend v-if="legend.length" :items="legend" class="organism-legend" />
+
     <figcaption v-if="!failed">
       The {{ TOP }} largest of the <LiveValue :value="stats?.species.length" width="1.4em" /> organisms listed
-      individually in the index statistics<template v-if="!stats || tail"> (<LiveValue :value="stats && tail" width="1.4em" />
+      individually in the index statistics, coloured by taxonomic group (UniProt taxonomy)<template v-if="!stats || tail"> (<LiveValue :value="stats && tail" width="1.4em" />
       more are reported only as a combined group)</template>. Index generated
       <LiveValue :value="stats?.generated_at.slice(0, 10)" width="6em" />. Full breakdown on the
       <router-link to="/statistics">Statistics</router-link> page.
@@ -44,7 +46,10 @@
 <script setup>
 import { computed } from 'vue'
 import LiveValue from './LiveValue.vue'
+import ChartLegend from './ChartLegend.vue'
 import { formatBig } from '../utils/format.js'
+import { chartColor } from '../utils/chartColors.js'
+import { TAXON_GROUPS, groupLegend, taxonGroup, useGroups } from '../chartGroups.js'
 
 const props = defineProps({
   // stats.json of the peptide search index; null while it loads.
@@ -60,6 +65,11 @@ const rows = computed(() =>
   (props.stats?.species || []).slice().sort((a, b) => b.proteins - a.proteins).slice(0, TOP)
 )
 const tail = computed(() => props.stats?.species_long_tail?.organisms || 0)
+
+// Bars wait in grey until their organism's group arrives.
+const { groups } = useGroups(() => rows.value.map((r) => r.organism), taxonGroup)
+const colourOf = (name) => groups.value[name]?.colour || chartColor('other')
+const legend = computed(() => groupLegend(TAXON_GROUPS, rows.value.map((r) => groups.value[r.organism]).filter(Boolean)))
 </script>
 
 <style scoped>
@@ -115,13 +125,16 @@ const tail = computed(() => props.stats?.species_long_tail?.organisms || 0)
   flex: none;
   height: 12px;
   border-radius: 0 4px 4px 0;
-  background: var(--brand);
   transform-origin: left center;
+  transition: background-color 240ms ease-out;
   animation: bar-grow 700ms var(--ease-enter) both;
   animation-delay: calc(var(--i) * 60ms);
 }
 .bars li:hover .bar {
-  background: var(--brand-deep);
+  filter: brightness(0.85);
+}
+.organism-legend {
+  margin: 14px 0 0;
 }
 .bar-value {
   font-size: 13px;
