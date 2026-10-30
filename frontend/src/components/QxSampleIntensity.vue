@@ -157,9 +157,9 @@ const tableRows = computed(() => rows.value.map((r) => ({
 .si-svg { display: block; width: 100%; height: 280px; }
 .si-band { fill: var(--bg-alt); }
 .si-grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.si-whisker { stroke: var(--indigo); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
-.si-box { fill: var(--indigo); }
-.si-box.hot { fill: var(--violet); }
+.si-whisker { stroke: var(--data); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.si-box { fill: var(--data); }
+.si-box.hot { fill: var(--data-deep); }
 .si-whisker.ref { stroke: var(--reg-ns); }
 .si-box.ref { fill: var(--reg-ns); }
 .si-median { stroke: var(--surface); stroke-width: 1.5; vector-effect: non-scaling-stroke; }

@@ -37,7 +37,7 @@
 
         <!-- Protein tags -->
         <div v-if="proteins.length" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
-          <span v-for="(p, i) in proteins" :key="p.name" class="protein-tag" :style="{ background: tagColors[i], color: '#fff' }">
+          <span v-for="(p, i) in proteins" :key="p.name" class="protein-tag" :style="{ background: tagColors[i], color: tagText(i) }">
             {{ p.name }}
             <span v-if="p.gene_name" style="opacity: 0.8; margin-left: 2px; font-weight: 400;">({{ p.gene_name }})</span>
             <button type="button" class="tag-close" :aria-label="`Remove ${p.name}`" @click="removeProtein(i)">&times;</button>
@@ -76,7 +76,7 @@
             {{ proteins[0].gene_name }}
           </span>
           <span class="tag tag-indigo" style="font-size: 12px;">iBAQ log₂</span>
-          <span class="tag" style="font-size: 12px; background: rgba(99,102,241,0.08); color: var(--text-secondary);">
+          <span class="tag" style="font-size: 12px; background: rgba(26, 95, 180, 0.08); color: var(--text-secondary);">
             Human Tissues
           </span>
         </div>
@@ -105,7 +105,8 @@
                 <th>Tissue</th>
                 <th style="text-align: center;">Samples</th>
                 <th v-for="(p, i) in proteins" :key="p.name" style="text-align: center; min-width: 80px;">
-                  <span :style="{ color: tagColors[i], fontWeight: 700 }">{{ p.name }}</span>
+                  <span class="legend-dot" :style="{ background: tagColors[i] }"></span>
+                  <span style="font-weight: 700; margin-left: 4px">{{ p.name }}</span>
                   <div v-if="p.gene_name" style="font-size: 10px; font-weight: 400; color: var(--text-muted);">{{ p.gene_name }}</div>
                 </th>
                 <th style="min-width: 180px; text-align: center;">Expression</th>
@@ -166,7 +167,8 @@
                       :style="{ top: (i * stripRowH + 2) + 'px', height: stripRowH + 'px' }"
                     >
                       <div v-if="getIqr(p, tissue)" class="strip-tooltip">
-                        <span :style="{ color: tagColors[i], fontWeight: 700 }">{{ p.name }}</span>
+                        <span class="legend-dot" :style="{ background: tagColors[i] }"></span>
+                        <span style="font-weight: 700; margin-left: 4px">{{ p.name }}</span>
                         median <strong>{{ getIqr(p, tissue).median.toFixed(2) }}</strong>
                         &nbsp;IQR {{ getIqr(p, tissue).q1.toFixed(2) }}–{{ getIqr(p, tissue).q3.toFixed(2) }}
                         &nbsp;(n={{ getIqr(p, tissue).count }})
@@ -190,13 +192,13 @@
           <div class="legend-guide">
             <svg width="180" height="16" style="vertical-align: middle;">
               <!-- Whisker -->
-              <line x1="8" x2="52" y1="8" y2="8" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" opacity="0.4" />
+              <line x1="8" x2="52" y1="8" y2="8" stroke="#59636e" stroke-width="2.5" stroke-linecap="round" opacity="0.4" />
               <!-- Q1 cap -->
-              <line x1="8" x2="8" y1="5" y2="11" stroke="#6366f1" stroke-width="1" opacity="0.5" />
+              <line x1="8" x2="8" y1="5" y2="11" stroke="#59636e" stroke-width="1" opacity="0.5" />
               <!-- Q3 cap -->
-              <line x1="52" x2="52" y1="5" y2="11" stroke="#6366f1" stroke-width="1" opacity="0.5" />
+              <line x1="52" x2="52" y1="5" y2="11" stroke="#59636e" stroke-width="1" opacity="0.5" />
               <!-- Median dot -->
-              <circle cx="30" cy="8" r="4" fill="#6366f1" stroke="#fff" stroke-width="1.5" />
+              <circle cx="30" cy="8" r="4" fill="#59636e" stroke="#fff" stroke-width="1.5" />
               <text x="62" y="11" font-size="10" fill="#94a3b8" font-family="var(--font)">Q1 ● median Q3 — hover for values</text>
             </svg>
           </div>
@@ -219,11 +221,16 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { computeStats, isAlreadyAdded } from '../utils/baseline.js'
 import { createBaselineClient } from '../utils/baselineClient.js'
+import { CATEGORICAL } from '../utils/chartColors.js'
 
 const router = useRouter()
 const route = useRoute()
 
-const tagColors = ['#409eff', '#6366f1', '#7c3aed', '#f59e0b', '#10b981']
+// One colour per selected protein (up to five), in the fixed categorical order;
+// every row also names its protein, so colour is never the only key.
+const tagColors = CATEGORICAL.slice(0, 5)
+// Label colour on a filled tag: white, except near-black on the yellow slot.
+const tagText = (i) => (tagColors[i] === '#eda100' ? '#0b0b0b' : '#fff')
 
 const query = ref('')
 const loadingData = ref(false)
@@ -389,13 +396,7 @@ function maxSampleCount(tissue) {
 
 // ── Heatmap cell coloring ──
 // Color-codes the median cell: white (low) → saturated protein color (high)
-const tagColorsRGB = [
-  [64, 158, 255],   // blue
-  [99, 102, 241],   // indigo
-  [124, 58, 237],   // violet
-  [245, 158, 11],   // amber
-  [16, 185, 129],   // green
-]
+const tagColorsRGB = tagColors.map((h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)))
 
 function heatmapStyle(protein, tissue, colorIndex) {
   const median = getMedian(protein, tissue)
@@ -407,7 +408,7 @@ function heatmapStyle(protein, tissue, colorIndex) {
   const [r, g, b] = tagColorsRGB[colorIndex] || tagColorsRGB[0]
   return {
     background: `rgba(${r}, ${g}, ${b}, ${alpha})`,
-    color: intensity > 0.6 ? `rgb(${r}, ${g}, ${b})` : 'var(--text-primary)',
+    color: 'var(--text-primary)',
     fontWeight: '600',
     textAlign: 'center',
     fontSize: '13px',
@@ -457,7 +458,7 @@ function stripX(val) {
 .search-input:focus {
   outline: none;
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px rgba(26, 95, 180, 0.2);
 }
 
 .example-link {
@@ -515,7 +516,7 @@ function stripX(val) {
 .summary-stat {
   text-align: center;
   padding: 12px 20px;
-  background: rgba(99,102,241,0.06);
+  background: rgba(26, 95, 180, 0.06);
   border-radius: 10px;
   border: 1px solid var(--border);
 }
@@ -533,7 +534,7 @@ function stripX(val) {
 }
 
 .expr-table thead tr {
-  background: rgba(99,102,241,0.06);
+  background: rgba(26, 95, 180, 0.06);
   border-bottom: 1px solid var(--border);
 }
 
@@ -555,7 +556,7 @@ function stripX(val) {
 
 .expr-table tbody tr:last-child { border-bottom: none; }
 
-.expr-table tbody tr:hover { background: rgba(99, 102, 241, 0.04); }
+.expr-table tbody tr:hover { background: rgba(26, 95, 180, 0.04); }
 
 .expr-table td {
   padding: 8px 14px;
@@ -624,7 +625,7 @@ function stripX(val) {
 .legend-bar {
   margin-top: 16px;
   padding: 12px 16px;
-  background: rgba(99,102,241,0.04);
+  background: rgba(26, 95, 180, 0.04);
   border-radius: 8px;
   display: flex;
   justify-content: space-between;

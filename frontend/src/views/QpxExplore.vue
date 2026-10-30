@@ -101,14 +101,14 @@
           <div class="qx-block">
             <div class="qx-block-label">Organisms</div>
             <div class="qx-chips">
-              <span v-for="o in overview.organisms" :key="o" class="tag tag-green">{{ o }}</span>
+              <span v-for="o in overview.organisms" :key="o" class="tag tag-cat-7">{{ o }}</span>
               <span v-if="!overview.organisms.length" class="text-muted">—</span>
             </div>
           </div>
           <div class="qx-block">
             <div class="qx-block-label">Instruments</div>
             <div class="qx-chips">
-              <span v-for="i in overview.instruments" :key="i" class="tag tag-blue">{{ i }}</span>
+              <span v-for="i in overview.instruments" :key="i" class="tag tag-cat-4">{{ i }}</span>
               <span v-if="!overview.instruments.length" class="text-muted">—</span>
             </div>
           </div>
@@ -888,7 +888,7 @@ watch(() => route.query, (q) => {
 .qx-examples-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .qx-example { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; cursor: pointer;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-primary); font: inherit; }
-.qx-example:hover:not(:disabled), .qx-example:focus-visible { border-color: var(--indigo); background: rgba(99, 102, 241, 0.03); }
+.qx-example:hover:not(:disabled), .qx-example:focus-visible { border-color: var(--indigo); background: rgba(26, 95, 180, 0.03); }
 .qx-example:disabled { cursor: default; opacity: 0.55; }
 .qx-example-acc { font-family: var(--mono); font-size: 12px; color: var(--indigo); }
 .qx-example-kind { font-size: 13px; color: var(--text-secondary); }
@@ -931,7 +931,7 @@ watch(() => route.query, (q) => {
 .qx-file-list { margin: 0; padding-left: 18px; color: var(--text-secondary); font-family: var(--mono); font-size: 13px; }
 
 .qx-prot-detail { margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--indigo); border-radius: 10px;
-  background: rgba(99, 102, 241, 0.03); scroll-margin-top: 90px; }
+  background: rgba(26, 95, 180, 0.03); scroll-margin-top: 90px; }
 .qx-detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .qx-mono { font-family: var(--mono); }
 .qx-normal { text-transform: none; }
@@ -945,7 +945,7 @@ watch(() => route.query, (q) => {
   padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface); cursor: pointer; font-size: 13px;
 }
-.qx-query-item.active { border-color: var(--indigo); background: rgba(99,102,241,0.04); }
+.qx-query-item.active { border-color: var(--indigo); background: rgba(26, 95, 180, 0.04); }
 
 /* SQL editor */
 .qx-builder { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--border, rgba(0,0,0,0.1)); border-radius: 8px; }

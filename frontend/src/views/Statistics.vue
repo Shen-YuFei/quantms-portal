@@ -70,7 +70,7 @@
             <h3>Instruments</h3>
             <p class="chart-sub">Datasets per instrument (top 10).</p>
             <div v-if="instrumentChart.labels.length">
-              <StatsChart type="doughnut" :data="instrumentChart" :height="320" />
+              <StatsChart type="bar" :data="instrumentChart" :options="hbarOptions" :height="Math.max(220, instrumentChart.labels.length * 26)" />
             </div>
             <p v-else class="chart-empty">No instrument data.</p>
           </section>
@@ -103,9 +103,11 @@
           <h3>Datasets by biological class</h3>
           <p class="chart-sub">Canonical proteomics vs immunopeptidomics, synthetic peptide libraries and metaproteomics (from the dataset enrichment).</p>
           <div v-if="classChart.labels.length">
-            <StatsChart type="doughnut" :data="classChart" :height="320" />
+            <StatsChart type="bar" :data="classChart" :options="hbarOptions" :height="Math.max(160, classChart.labels.length * 30)" />
           </div>
-          <p v-else class="chart-empty">No class data (dataset enrichment not yet published).</p>
+          <p v-else class="chart-empty">
+            No dataset has a biological class yet<template v-if="unclassified"> ({{ unclassified }} datasets are listed as unknown)</template>.
+          </p>
         </section>
 
         <!-- Per-collection breakdown -->
@@ -152,6 +154,7 @@ import { ref, computed, onMounted } from 'vue'
 import { apiGet } from '../api.js'
 import { BROWSE_BASE, STATS_PATH } from '../config.js'
 import { formatBig, formatNum, cleanInstrument, collectionTag, datasetClassLabel } from '../utils/format.js'
+import { chartColor } from '../utils/chartColors.js'
 import StatsChart from '../components/StatsChart.vue'
 
 const TOP = 25
@@ -180,13 +183,9 @@ const modMetrics = [
 const speciesMetricLabel = computed(() => speciesMetrics.find((m) => m.key === speciesMetric.value).label)
 const modMetricLabel = computed(() => modMetrics.find((m) => m.key === modMetric.value).label)
 
-// Palette from the portal design tokens (falls back to literals for SSR-less canvas).
-const PALETTE = ['#6366f1', '#7c3aed', '#409eff', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6', '#0ea5e9', '#f43f5e']
-const color = (i) => PALETTE[i % PALETTE.length]
-const alpha = (hex, a) => {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-}
+// Each chart has one hue: the hue of the dimension it is about (organism,
+// tissue, instrument) or --data; a pooled "other" bar is grey.
+const fill = (n, role) => Array(n).fill(chartColor(role))
 
 // --- KPI cards ---------------------------------------------------------------
 const kpis = computed(() => {
@@ -223,15 +222,13 @@ const modHasClass = computed(() =>
 const modChart = computed(() => {
   const mods = (stats.value?.modifications || []).slice().sort((a, b) => (b[modMetric.value] || 0) - (a[modMetric.value] || 0))
   const classed = modHasClass.value
-  const barColor = (m, i) => (classed ? (modIsBio(m) ? MOD_BIO_COLOR : MOD_CHEM_COLOR) : color(i))
+  const barColor = (m) => (classed ? (modIsBio(m) ? MOD_BIO_COLOR : MOD_CHEM_COLOR) : chartColor('data'))
   return {
     labels: mods.map((m) => m.modification),
     datasets: [{
       label: modMetricLabel.value,
       data: mods.map((m) => m[modMetric.value] || 0),
-      backgroundColor: mods.map((m, i) => alpha(barColor(m, i), 0.85)),
-      borderColor: mods.map((m, i) => barColor(m, i)),
-      borderWidth: 1,
+      backgroundColor: mods.map(barColor),
       // stash per-residue split for the tooltip
       _sites: mods.map((m) => m.sites || []),
       // stash a class label ("Biological" / "Fixed"…) for the tooltip
@@ -272,35 +269,44 @@ const speciesChart = computed(() => {
     datasets: [{
       label: speciesMetricLabel.value,
       data,
-      backgroundColor: labels.map((_, i) => alpha(color(i), 0.85)),
-      borderColor: labels.map((_, i) => color(i)),
-      borderWidth: 1,
+      backgroundColor: [...fill(rows.length, 'organism'), ...fill(labels.length - rows.length, 'other')],
     }],
   }
 })
 
-// --- instruments (doughnut, top 10 + Other) ---------------------------------
+// --- instruments (top 10 + Other) -------------------------------------------
+// Accession-prefixed names ("AC=MS:…;NT=Q Exactive") are merged with the plain
+// name, so one instrument is one bar.
 const instrumentChart = computed(() => {
-  const all = (stats.value?.instruments || []).map((i) => ({ name: cleanInstrument(i.instrument), datasets: i.datasets }))
+  const merged = new Map()
+  for (const i of stats.value?.instruments || []) {
+    const name = cleanInstrument(i.instrument)
+    merged.set(name, (merged.get(name) || 0) + i.datasets)
+  }
+  const all = [...merged].sort((a, b) => b[1] - a[1])
   const top = all.slice(0, 10)
-  const rest = all.slice(10).reduce((s, i) => s + i.datasets, 0)
-  const labels = top.map((i) => i.name)
-  const data = top.map((i) => i.datasets)
+  const rest = all.slice(10).reduce((sum, [, n]) => sum + n, 0)
+  const labels = top.map(([name]) => name)
+  const data = top.map(([, n]) => n)
   if (rest > 0) { labels.push('Other'); data.push(rest) }
   return {
     labels,
-    datasets: [{ data, backgroundColor: labels.map((_, i) => color(i)), borderWidth: 0 }],
+    datasets: [{ label: 'Datasets', data, backgroundColor: [...fill(top.length, 'instrument'), ...fill(labels.length - top.length, 'other')] }],
   }
 })
 
-// --- biological dataset classes (doughnut, one slice per class) --------------
+// --- biological dataset classes ----------------------------------------------
+// "unknown" is drawn last in grey; with no known class there is no chart.
+const unclassified = computed(() => stats.value?.datasets_by_class?.unknown || 0)
 const classChart = computed(() => {
-  const rows = stats.value?.datasets_by_class || {}
-  const entries = Object.entries(rows)
-  const labels = entries.map(([k]) => datasetClassLabel(k))
+  const known = Object.entries(stats.value?.datasets_by_class || {}).filter(([k]) => k !== 'unknown').sort((a, b) => b[1] - a[1])
+  if (!known.length) return { labels: [], datasets: [] }
+  const labels = known.map(([k]) => datasetClassLabel(k))
+  const data = known.map(([, v]) => v)
+  if (unclassified.value) { labels.push(datasetClassLabel('unknown')); data.push(unclassified.value) }
   return {
     labels,
-    datasets: [{ data: entries.map(([, v]) => v), backgroundColor: labels.map((_, i) => color(i)), borderWidth: 0 }],
+    datasets: [{ label: 'Datasets', data, backgroundColor: [...fill(known.length, 'data'), ...fill(labels.length - known.length, 'other')] }],
   }
 })
 
@@ -312,9 +318,7 @@ const tissueChart = computed(() => {
     datasets: [{
       label: 'Datasets',
       data: rows.map((t) => t.datasets),
-      backgroundColor: rows.map((_, i) => alpha(color(i), 0.85)),
-      borderColor: rows.map((_, i) => color(i)),
-      borderWidth: 1,
+      backgroundColor: fill(rows.length, 'tissue'),
     }],
   }
 })
@@ -327,9 +331,7 @@ const coverageChart = computed(() => {
     datasets: [{
       label: 'Coverage %',
       data: rows.map((r) => Math.min(100, Math.round((r.coverage || 0) * 1000) / 10)),
-      backgroundColor: rows.map((_, i) => alpha(color(i), 0.85)),
-      borderColor: rows.map((_, i) => color(i)),
-      borderWidth: 1,
+      backgroundColor: fill(rows.length, 'organism'),
       _rows: rows,
     }],
   }
@@ -396,7 +398,7 @@ onMounted(load)
 .kpi-value {
   font-size: 30px;
   font-weight: 700;
-  color: var(--indigo);
+  color: var(--brand-deep);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }

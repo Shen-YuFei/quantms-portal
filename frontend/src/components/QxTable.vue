@@ -119,7 +119,7 @@ const shownRows = computed(() => {
 .qt-num { text-align: right; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
 th.qt-num .qt-sort { justify-content: flex-end; }
 .qt-text { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qt-selected { background: rgba(99, 102, 241, 0.08); }
+.qt-selected { background: rgba(26, 95, 180, 0.08); }
 .qt-state { text-align: center; padding: 40px 12px; color: var(--text-muted); }
 .qt-updating table { opacity: 0.5; transition: opacity 0.15s; }
 .qt-state-progress { max-width: 320px; margin: 40px auto; }

@@ -53,6 +53,8 @@ function baseOptions() {
     responsive: true,
     maintainAspectRatio: false,
     animation: { duration: 400 },
+    // Thin marks: a bar never fills its whole band.
+    datasets: { bar: { maxBarThickness: 20 } },
     plugins: {
       legend: {
         display: props.type === 'doughnut',

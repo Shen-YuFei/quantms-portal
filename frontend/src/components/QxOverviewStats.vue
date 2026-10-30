@@ -47,6 +47,7 @@ import { computed, reactive, watch } from 'vue'
 import StatsChart from './StatsChart.vue'
 import QxProgress from './QxProgress.vue'
 import { qpxStats } from '../qpx.js'
+import { chartColor } from '../utils/chartColors.js'
 
 const props = defineProps({ datasetRef: { type: String, required: true } })
 
@@ -116,16 +117,12 @@ function gridCols(n) {
   return { '--qo-cols': Math.max(1, Math.min(n, best)) }
 }
 
-function cssVar(name, fallback) {
-  const v = typeof document !== 'undefined' ? getComputedStyle(document.documentElement).getPropertyValue(name) : ''
-  return (v && v.trim()) || fallback
-}
-
-// One measure per chart, so one hue: the portal accent.
-function bars(labels, values) {
+// One measure per chart, so one hue: --data for counts, or the hue of the
+// metadata dimension the chart is about.
+function bars(labels, values, role = 'data') {
   return {
     labels,
-    datasets: [{ data: values, backgroundColor: cssVar('--indigo', '#6366f1'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 28 }],
+    datasets: [{ data: values, backgroundColor: chartColor(role), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 24 }],
   }
 }
 
@@ -163,6 +160,7 @@ function barOptions(c) {
 }
 
 const META_TITLES = { organism_part: 'Organism part', disease: 'Disease', cell_line: 'Cell line', sex: 'Sex' }
+const META_COLORS = { organism_part: 'tissue', disease: 'disease', cell_line: 'cellLine' }
 const metaFields = computed(() => {
   const d = parts.metadata.data
   if (!d || !d.available) return []
@@ -170,7 +168,7 @@ const metaFields = computed(() => {
     .filter(([, f]) => f.top && f.top.length > 1)
     .map(([key, f]) => ({ key, title: META_TITLES[key] || key, top: f.top, distinct: f.distinct }))
 })
-const metaData = (f) => bars(f.top.map(([v]) => v), f.top.map(([, n]) => n))
+const metaData = (f) => bars(f.top.map(([v]) => v), f.top.map(([, n]) => n), META_COLORS[f.key])
 const metaOptions = { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
 </script>
 
