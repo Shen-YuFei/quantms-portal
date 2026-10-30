@@ -3,7 +3,12 @@
     <div v-if="error" class="notice">{{ error }}</div>
     <QxProgress v-if="loading && !rows.length" class="qt-state-progress" label="Loading…" />
     <div v-else-if="!rows.length && !error" class="qt-state">{{ emptyText }}</div>
-    <div v-else-if="rows.length" class="dataset-table-wrap qt-wrap" :class="{ 'qt-updating': loading }">
+    <div
+      v-else-if="rows.length"
+      class="dataset-table-wrap qt-wrap"
+      :class="{ 'qt-updating': loading, 'qt-scrolled': scrolled }"
+      @scroll.passive="scrolled = $event.target.scrollLeft > 0"
+    >
       <QxProgress v-if="loading" class="qt-refresh" />
       <table class="dataset-table qt-table">
         <thead>
@@ -42,7 +47,7 @@
 <script setup>
 // Sortable table for qpx rows. Rows are arrays (aligned with `columns`) or objects.
 // serverSort: header clicks emit `sort` and the parent reloads; otherwise rows sort here.
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { colLabel, compareValues, formatCell, isNumericColumn } from '../qpxFormat.js'
 import QxProgress from './QxProgress.vue'
 
@@ -60,6 +65,8 @@ const props = defineProps({
   selected: { type: [String, Number], default: null },
 })
 const emit = defineEmits(['sort'])
+// scrolled sideways: the pinned first column casts a shadow
+const scrolled = ref(false)
 
 const cols = computed(() => props.columns.map((c) => (typeof c === 'string'
   ? { key: c, label: colLabel(c) }
@@ -110,7 +117,15 @@ const shownRows = computed(() => {
 
 <style scoped>
 .qt-wrap { position: relative; max-height: 70vh; overflow: auto; }
-.qt-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-alt); }
+.qt-table thead th { position: sticky; top: 0; z-index: 2; background: var(--bg-alt); padding: 8px 12px; }
+.qt-table td { padding: 7px 12px; }
+/* the first column (the row's name) stays in view when the table scrolls sideways */
+.qt-table th:first-child, .qt-table td:first-child { position: sticky; left: 0; }
+.qt-table td:first-child { z-index: 1; background: var(--surface); }
+.qt-table thead th:first-child { z-index: 3; }
+.qt-table tbody tr:hover td:first-child { background: #fafcfe; }
+.qt-table tbody tr.qt-selected td:first-child { background: #edf2f9; }
+.qt-scrolled .qt-table th:first-child, .qt-scrolled .qt-table td:first-child { box-shadow: 6px 0 8px -6px rgba(15, 23, 42, 0.25); }
 .qt-sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;
   text-transform: inherit; letter-spacing: inherit; font: inherit; color: inherit; }
 .qt-sort:hover { color: var(--text-primary); }

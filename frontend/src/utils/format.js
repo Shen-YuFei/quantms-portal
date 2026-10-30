@@ -1,6 +1,6 @@
 // Shared display formatters used across views.
 
-import { categorySlot } from './chartColors.js'
+import { CATEGORICAL, categorySlot } from './chartColors.js'
 
 // Compact big-number: 1_234_567 -> "1.2M".
 export function formatBig(n) {
@@ -122,6 +122,11 @@ const COLLECTION_SLOTS = {
 }
 export function collectionTag(name) {
   return `tag-cat-${categorySlot(name, COLLECTION_SLOTS)}`
+}
+
+// The palette colour of a collection's tag, for marks beside it.
+export function collectionColour(name) {
+  return CATEGORICAL[categorySlot(name, COLLECTION_SLOTS) - 1]
 }
 
 // --- biological dataset classes ----------------------------------------------

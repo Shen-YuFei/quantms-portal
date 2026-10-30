@@ -76,6 +76,9 @@
   --data: var(--cat-1);
   --data-deep: #184f95;
   --data-other: #a3acb6;
+  /* a measure pooled over samples of several groups (no single annotation);
+     a navy outside the categorical palette, so it never reads as a group */
+  --data-pooled: #0b3a6a;
   --dim-disease: var(--cat-2);
   --dim-tissue: var(--cat-3);
   --dim-instrument: var(--cat-4);
